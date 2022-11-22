@@ -11,8 +11,8 @@ Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char*
     if (dfr == nullptr) { LOG_ERROR (BAD_ARGS); DFR_ERROR_DUMP (dfr); return BAD_ARGS; }
 
 
-    dfr->code = (Tree*) calloc (DFR_SIZE, 1);
-    TREE_CTOR (dfr->code);
+    dfr->user_function_tree = (Tree*) calloc (DFR_SIZE, 1);
+    TREE_CTOR (dfr->user_function_tree);
 
 
     dfr->debug_info.name       = name;
@@ -22,16 +22,63 @@ Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char*
     dfr->debug_info.adress     = dfr;
 
 
-    TREE_AFTER_OPERATION_DUMPING (dfr);
+    DFR_AFTER_OPERATION_DUMPING (dfr);
 
 
     return SUCCESS;
 }
 
 
-void _fdfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line) {
+void _fdfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* file_mode, const char* additional_text) {
 
-    _ftree_dump (dfr->code, file_name, file, function, line);
+    static bool first_time_dumping = true;
+
+    if (strcmp (file_mode, "w") && strcmp (file_mode, "a")) {
+
+        if (first_time_dumping) { file_mode = "w"; }
+        else                    { file_mode = "a"; }
+    }
+
+
+    FILE* dump_file = fopen (file_name, file_mode);
+    if (dump_file == nullptr) { LOG_ERROR (FILE_ERR); return; }
+
+
+    setvbuf (dump_file, NULL, _IONBF, 0);
+
+
+    fprintf (dump_file, "<pre><h1>");
+    fprintf (dump_file,"%s", additional_text);
+    fprintf (dump_file, "</h1>");
+    fprintf (dump_file, "<h1>Dumping differenciator at %s in function %s (line %d)...</h1>\n\n", file, function, line);
+
+
+    if (!dfr) { fprintf (dump_file, "Tree pointer is nullptr!\n\n"); return; }
+
+
+    fprintf (dump_file, "this differenciator has name ");
+    if (dfr->debug_info.name != nullptr) { fprintf (dump_file, "%s ", dfr->debug_info.name); }
+    else                                 { fprintf (dump_file, "UNKNOWN NAME "); }
+    fprintf (dump_file, "[%p]\n", dfr->debug_info.adress);
+
+    fprintf (dump_file, "it was created in file ");
+    if (dfr->debug_info.birth_file != nullptr) { fprintf (dump_file, "%s\n", dfr->debug_info.birth_file); }
+    else                                       { fprintf (dump_file, "UNKNOWN NAME\n"); }
+
+    fprintf (dump_file, "in function ");
+    if (dfr->debug_info.birth_func != nullptr) { fprintf (dump_file, "%s ", dfr->debug_info.birth_func); }
+    else                                       { fprintf (dump_file, "UNKNOWN NAME "); }
+
+    fprintf (dump_file, "(line %d)\n\n", dfr->debug_info.birth_line);
+
+
+    fclose (dump_file);
+
+
+    first_time_dumping = false;
+
+
+    return;
 }
 
 
@@ -44,14 +91,325 @@ size_t get_operation_priority (Operation_code operation_code) {
         case DOC_SUB:  return 4;
         case DOC_DIV:  return 3;
         case DOC_MULT: return 3;
-        case DOC_POW:  return 1;
+        /*case DOC_POW:  return 1;
         case DOC_SIN:  return 2;
-        case DOC_COS:  return 2;
+        case DOC_COS:  return 2;*/
 
         default: LOG_ERROR (BAD_ARGS); return 0;
     }
 }
 
+
+Return_code  read_number  (const char** string_ptr, Node** node_ptr) {
+
+    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    double value = 0;
+
+    const char* old_string = *string_ptr;
+
+    while (**string_ptr >= '0' && **string_ptr <= '9') {
+
+        value = (value * 10) + (**string_ptr - '0');
+        *string_ptr += 1;
+    }
+
+    assert (*string_ptr > old_string);
+
+
+    (*node_ptr) = create_node (DAT_CONST, value);
+
+
+    return SUCCESS;
+}
+
+
+bool is_variable_start (char simbol) {
+
+    if ((simbol >= 'a' && simbol <= 'z') ||
+        (simbol >= 'A' && simbol <= 'Z') ||
+        (simbol == '_')) {
+
+        return true;
+    }
+
+
+    return false;
+}
+
+
+bool is_variable_mid   (char simbol) {
+
+    if ((simbol >= '0' && simbol <= '9') ||
+        (simbol >= 'a' && simbol <= 'z') ||
+        (simbol >= 'A' && simbol <= 'Z') ||
+        (simbol == '_')) {
+
+        return true;
+    }
+
+
+    return false;
+}
+
+
+Return_code  read_variable  (const char** string_ptr, Node** node_ptr) {
+
+    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    char* variable = (char*) calloc (MAX_VARIABLE_LEN + 1, 1);
+    size_t i = 0;
+
+    const char* old_string = *string_ptr;
+
+
+    if (is_variable_start (**string_ptr)) {
+
+        variable [i] = **string_ptr;
+        *string_ptr += 1;
+        i += 1;
+    }
+
+    else {
+
+        LOG_ERROR (BAD_ARGS);
+        return BAD_ARGS; 
+    }
+
+
+    while (is_variable_mid (**string_ptr) && i < MAX_VARIABLE_LEN) {
+
+        variable [i] = **string_ptr;
+        *string_ptr += 1;
+        i += 1;
+    }
+
+
+    variable [i] = '\0';
+
+    assert (*string_ptr > old_string);
+
+
+    (*node_ptr) = create_node (DAT_VARIABLE, variable);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  read_primary  (const char** string_ptr, Node** node_ptr) {
+
+    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (**string_ptr == '(') {
+
+        *string_ptr += 1;
+
+        read_sum (string_ptr, node_ptr); ///////???]////
+
+        *string_ptr += 1;
+    }
+
+    else if (is_variable_start (**string_ptr)) { read_variable (string_ptr, node_ptr); }
+    else                                       { read_number   (string_ptr, node_ptr); }
+
+    return SUCCESS;
+}
+
+
+Return_code  read_product  (const char** string_ptr, Node** node_ptr) {
+
+    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    read_primary (string_ptr, node_ptr);
+
+
+    Node* new_node = nullptr;
+
+    while (**string_ptr == '*' || **string_ptr == '/') {
+
+        char op = **string_ptr;
+
+
+        if (op == '*') {
+
+            new_node = create_node (DAT_OPERATION, DOC_MULT);
+            new_node->left_son = *node_ptr;
+        }
+
+        else {
+
+            new_node = create_node (DAT_OPERATION, DOC_DIV);
+            new_node->left_son = *node_ptr;
+        }
+
+        *string_ptr += 1;
+
+        *node_ptr = new_node;
+
+        read_primary (string_ptr, &(*node_ptr)->right_son);
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  read_sum  (const char** string_ptr, Node** node_ptr) {
+
+    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    read_product (string_ptr, node_ptr);
+
+
+    Node* new_node = nullptr;
+
+    while (**string_ptr == '+' || **string_ptr == '-') {
+
+        char op = **string_ptr;
+
+
+        if (op == '+') {
+
+            new_node = create_node (DAT_OPERATION, DOC_ADD);
+            new_node->left_son = *node_ptr;
+        }
+
+        else {
+
+            new_node = create_node (DAT_OPERATION, DOC_SUB);
+            new_node->left_son = *node_ptr;
+        }
+
+        *string_ptr += 1;
+
+        *node_ptr = new_node;
+
+        read_product (string_ptr, &(*node_ptr)->right_son);
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  read_general  (const char* string, Tree* tree) {
+
+    if (!string || !tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    read_sum (&string, &tree->root);
+
+
+    assert (*string == '\0');
+
+
+    return SUCCESS;
+}
+
+
+Return_code read_user_function (Dfr* dfr, const char* file_name) {
+
+    if (!dfr || !dfr->user_function_tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    FILE* file = fopen (file_name, "r");
+    if (!file) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
+
+
+    size_t file_len = get_file_len (file);
+    char buffer [file_len + 1] = "";
+    fread (buffer, 1, file_len, file);
+    fclose (file);
+
+
+    try (read_general (buffer, dfr->user_function_tree));
+
+
+    return SUCCESS;
+}
+
+
+Node* create_node (Atom_type atom_type, ...) {
+
+    va_list value;
+    va_start (value, atom_type);
+
+
+    Node* node = (Node*) calloc (NODE_SIZE, 1); if (!node) { LOG_ERROR (MEMORY_ERR); return nullptr; }
+
+    node->atom_type = atom_type;
+    node->left_son  = nullptr;
+    node->right_son = nullptr;
+    node->element.poisoned = false;
+
+
+    switch (atom_type) {
+
+        case DAT_OPERATION: node->element.value.val_operation_code = (Operation_code) va_arg(value, int); break;
+        case DAT_CONST:     node->element.value.val_double         = va_arg(value, double);         break;
+        case DAT_VARIABLE:  node->element.value.var_str            = va_arg(value, char*);          break;
+
+        default: LOG_ERROR (BAD_ARGS); return nullptr;
+    }
+
+
+    va_end (value);
+
+
+    return node;
+}
+
+
+void _fdfr_graphdump (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* additional_text) {
+
+    assert ( (file_name) && (file) && (function) && (line > 0) && (additional_text));
+
+
+    char file_path [MAX_COMMAND_LEN] = "";
+    strcat (file_path, file_name);
+    strcat (file_path, ".html");
+
+
+    const char* file_mode = nullptr;
+    if ( !strcmp (GLOBAL_graph_dump_num, "1")) { file_mode = "w"; }
+    else                                       { file_mode = "a"; }
+
+
+    FILE* dump_file = fopen (file_path, file_mode);
+    if (dump_file == nullptr) { LOG_ERROR (FILE_ERR); return; }
+
+
+    printf ("(dfr):  generating %s graph dump...\n", GLOBAL_graph_dump_num);
+
+
+    setvbuf (dump_file, NULL, _IONBF, 0);
+
+
+    fprintf (dump_file, "<pre><h1>");
+    fprintf (dump_file,"%s", additional_text);
+    fprintf (dump_file, "</h1>");
+    fprintf (dump_file, "<h1>Dumping differenciator at %s in function %s (line %d)...</h1>\n\n", file, function, line);
+    fprintf (dump_file, "<h1>User function tree:</h1>\n\n");
+
+
+    fclose (dump_file);
+
+
+    itoa ( (atoi (GLOBAL_graph_dump_num) + 1), GLOBAL_graph_dump_num, DEFAULT_COUNTING_SYSTEM); //incrementation of graph_dump_num
+
+
+    FTREE_GRAPHDUMP (dfr->user_function_tree);
+
+
+    return;
+}
+/*
 Return_code  dfr_read  (Dfr* dfr, const char* file_name) {
 
     if (!tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
@@ -141,7 +499,7 @@ Return_code  _atom_read  (char* buffer, size_t* current, Tree* tree, Node* node)
     return SUCCESS;
 }
 
-/*
+
 Return_code  _tree_ctor  (Tree* tree, const char* name, const char* file, const char* func, int line, Element_value root_str) {
 
     assert ( (file) && (name) && (func) && (line > 0) );

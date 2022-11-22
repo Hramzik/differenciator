@@ -36,9 +36,9 @@ enum Operation_code {
     DOC_SUB  = 2,
     DOC_DIV  = 3,
     DOC_MULT = 4,
-    DOC_POW  = 5,
+    /*DOC_POW  = 5,
     DOC_SIN  = 6,
-    DOC_COS  = 7,
+    DOC_COS  = 7,*/
 };
 
 union Atom {

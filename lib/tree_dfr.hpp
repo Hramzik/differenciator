@@ -22,65 +22,13 @@
 #include "types/Elements/Element_atom.hpp"
 
 
+
+
+
+
 #include "types/Tree_dfr.hpp"
 
-const size_t TREE_SIZE = sizeof (Tree);
 
-
-typedef struct Tree_iterator_structure Tree_iterator;
-struct         Tree_iterator_structure  {
-
-    Node*  current;
-    size_t index;
-    size_t depth;
-    Stack* node_stack;
-
-    const char* mode;
-};
-
-
-
-Return_code _tree_ctor (Tree* tree, const char* name, const char* file, const char* func, int line);
-Return_code  tree_dtor (Tree* tree);
-Return_code _node_dtor (Node* node);
-
-Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
-Return_code  tree_push_right (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
-
-size_t tree_depth (Tree* tree);
-
-Tree_state  tree_damaged             (Tree* tree);
-Tree_state _tree_poison_distribution (Tree* tree);
-Tree_state _node_poison_distribution (Node* node);
-
-void        _ftree_dump                      (Tree* tree, const char* file_name, const char* file, const char* func, int line);
-Return_code _fdump_nodes                     (FILE* dump_file, Tree* tree, const char* mode = "pre");
-Return_code _fprint_node                     (FILE* file, Node* node, size_t depth);
-void        _fprint_tabs                     (FILE* file, size_t num);
-void        _ftree_graphdump                 (Tree* tree, const char* file_name, const char* file, const char* func, int line, const char* additional_text = "");
-void         _tree_show_graph_dump            (void);
-void         _tree_generate_graph_describtion (Tree* tree);
-void         tree_generate_nodes_describtion (Tree* tree, FILE* file);
-void         _tree_generate_graph             (void);
-
-Return_code  tree_save (Tree* tree, const char* file_name = tree_default_save_file_name);
-Return_code  tree_read (Tree* tree, const char* file_name = tree_default_save_file_name);
-Return_code _node_read (char* buffer, size_t* current, Tree* tree, Node* node);
-
-Return_code tree_iterator_inc            (Tree_iterator* tree_iterator);
-Return_code _tree_iterator_inc_in_order  (Tree_iterator* tree_iterator);
-Return_code _tree_iterator_inc_pre_order (Tree_iterator* tree_iterator);
-Return_code tree_iterator_ctor           (Tree_iterator* tree_iterator, Tree* tree, const char* inc_mode = "pre");
-Return_code tree_iterator_dtor           (Tree_iterator* tree_iterator);
-
-Return_code _tree_iterator_ctor_fill_stack_in_order  (Tree_iterator* tree_iterator, Tree* tree);
-Return_code _tree_iterator_ctor_fill_stack_pre_order (Tree_iterator* tree_iterator, Tree* tree);
-
-bool _ispositive (const char* answer);
-bool _isnegative (const char* answer);
-bool _isleaf     (Node* node);
-
-void _speak (const char* format, ...);
 
 
 //--------------------------------------------------
@@ -155,7 +103,7 @@ Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_
 
         case DAT_OPERATION: node->left_son->element   = { { .val_operation_code = new_element_value }, false }; break;
         case DAT_CONST:     node->left_son->element   = { { .val_double         = new_element_value }, false }; break;
-        case DAT_VAR:       node->left_son->element   = { { .var_str            = new_element_value }, false }; break;
+        case DAT_VARIABLE:  node->left_son->element   = { { .var_str            = new_element_value }, false }; break;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
@@ -180,7 +128,7 @@ Return_code  tree_push_right  (Tree* tree, Node* node, Element_value new_element
 
         case DAT_OPERATION: node->left_son->element   = { { .val_operation_code = new_element_value }, false }; break;
         case DAT_CONST:     node->left_son->element   = { { .val_double         = new_element_value }, false }; break;
-        case DAT_VAR:       node->left_son->element   = { { .var_str            = new_element_value }, false }; break;
+        case DAT_VARIABLE:  node->left_son->element   = { { .var_str            = new_element_value }, false }; break;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
@@ -241,16 +189,18 @@ Tree_state _node_poison_distribution (Node* node) {
 }
 
 
-void  _ftree_dump  (Tree* tree, const char* file_name, const char* file, const char* func, int line) {
+void  _ftree_dump  (Tree* tree, const char* file_name, const char* file, const char* func, int line, const char* file_mode) {
 
     assert ( (file_name) && (file) && (func) && (line > 0) );
 
 
-    const  char* file_mode          = nullptr;
-    static bool  first_time_dumping = true;
+    static bool first_time_dumping = true;
 
-    if (first_time_dumping) { file_mode = "w"; }
-    else                    { file_mode = "a"; }
+    if (strcmp (file_mode, "w") && strcmp (file_mode, "a")) {
+
+        if (first_time_dumping) { file_mode = "w"; }
+        else                    { file_mode = "a"; }
+    }
 
 
     FILE* dump_file = fopen (file_name, file_mode);
@@ -301,10 +251,6 @@ void  _ftree_dump  (Tree* tree, const char* file_name, const char* file, const c
 
     fprintf (dump_file, "\n\nin-order:\n\n");
     _fdump_nodes (dump_file, tree, "in");
-
-    fprintf (dump_file, "\n\nas in save file:\n\n");
-    _fprint_node (dump_file, tree->root, 0);
-
 
 
     fprintf (dump_file, "\n");
@@ -526,61 +472,6 @@ bool  _isleaf  (Node* node) {
 }
 
 
-Return_code  _fprint_node  (FILE* file, Node* node, size_t depth) {
-
-    if (!file || !node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    _fprint_tabs (file, depth);
-
-
-
-    if (_isleaf (node)) {
-
-        fprintf (file, "{");
-
-        switch (node->atom_type) {
-
-            case DAT_OPERATION: fprintf (file, "%d",  node->element.value.val_operation_code); break;
-            case DAT_CONST:     fprintf (file, "%lf", node->element.value.val_double);         break;
-            case DAT_VAR:       fprintf (file, "%s",  node->element.value.var_str);            break;
-
-            default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
-        }
-
-        fprintf (file, "}\n");
-
-        return SUCCESS;
-    }
-
-
-
-    fprintf (file, "{");
-
-    switch (node->atom_type) {
-
-        case DAT_OPERATION: fprintf (file, "%d",  node->element.value.val_operation_code); break;
-        case DAT_CONST:     fprintf (file, "%lf", node->element.value.val_double);         break;
-        case DAT_VAR:       fprintf (file, "%s",  node->element.value.var_str);            break;
-
-        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
-    }
-
-    fprintf (file, "\n");
-
-
-    try (_fprint_node (file, node->left_son,  depth + 1));
-    try (_fprint_node (file, node->right_son, depth + 1));
-
-
-    _fprint_tabs (file, depth);
-    fprintf (file, "}\n");
-
-
-    return SUCCESS;
-}
-
-
 void  _fprint_tabs  (FILE* file, size_t num) {
 
     for (size_t i = 0; i < num; i++) {
@@ -606,9 +497,13 @@ Return_code  _fdump_nodes  (FILE* dump_file, Tree* tree, const char* mode) {
 
         switch (tree_iterator.current->atom_type) {
 
-            case DAT_OPERATION: fprintf (dump_file, "%d",  tree_iterator.current->element.value.val_operation_code); break;
-            case DAT_CONST:     fprintf (dump_file, "%lf", tree_iterator.current->element.value.val_double);         break;
-            case DAT_VAR:       fprintf (dump_file, "%s",  tree_iterator.current->element.value.var_str);            break;
+            case DAT_OPERATION: fprintf (dump_file,  "%d (aka \"%s\") (type Operation_code)",
+                                                                         tree_iterator.current->element.value.val_operation_code,
+                                                 _operation_code_to_str (tree_iterator.current->element.value.val_operation_code)
+                                        ); break;
+
+            case DAT_CONST:     fprintf (dump_file, "%lf (type double)", tree_iterator.current->element.value.val_double);         break;
+            case DAT_VARIABLE:  fprintf (dump_file,  "%s (type string)", tree_iterator.current->element.value.var_str);            break;
 
             default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
         }
@@ -623,115 +518,6 @@ Return_code  _fdump_nodes  (FILE* dump_file, Tree* tree, const char* mode) {
     return SUCCESS;
 }
 
-
-Return_code  tree_save  (Tree* tree, const char* file_name) {
-
-    if (!tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    FILE* file = fopen (file_name, "w");
-    if (!file) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
-
-
-    _fprint_node (file, tree->root, 0);
-
-
-    return SUCCESS;
-}
-
-/*
-Return_code  tree_read  (Tree* tree, const char* file_name) {
-
-    if (!tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    FILE* file = fopen (file_name, "r");
-    if (!file) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
-
-
-    size_t file_len = get_file_len (file);
-    char buffer [ file_len + 1] = "";
-    fread (buffer, 1, file_len, file);
-
-
-    fclose (file);
-
-
-    size_t current = 0;
-    _node_read (buffer, &current, tree, tree->root);
-
-
-    return SUCCESS;
-}
-
-
-Return_code  _node_read  (char* buffer, size_t* current, Tree* tree, Node* node) {
-
-    if (!buffer || !tree || !node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    while (buffer [*current] != '{') { *current += 1; }
-    *current += 1;
-
-
-    size_t num_read_sons = 0;
-    bool read_question = false;
-    char* question = (char*) calloc (MAX_QUESTION_LEN, 1);
-    question [0]   = '\0';
-    size_t question_len = 0;
-
-    int c = 1;
-
-    while (c != EOF) {
-
-        c = buffer [*current];
-        *current += 1;
-
-
-        if (c == '{') {
-
-            if (num_read_sons >= 2) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-            *current -= 1;
-
-            if (num_read_sons == 1) { //already read left son
-
-                tree_push_right (tree, node, nullptr);
-                _node_read      (buffer, current, tree, node->right_son);
-                num_read_sons += 1;
-                continue;
-            }
-
-            tree_push_left (tree, node, nullptr); //reading left son
-            _node_read     (buffer, current, tree, node->left_son);
-            num_read_sons += 1;
-            continue;
-        }
-
-
-        if (c == '}') {
-
-            if (!read_question) { node->element.value = question; }
-            break;
-        }
-
-
-        if (c == '\n' && !read_question) { node->element.value = question; read_question = true; }
-
-
-        if (!read_question) {
-
-            question [question_len + 1] = '\0';
-            question [question_len]     = (char) c;
-            question_len += 1;
-        }
-    }
-
-
-    return SUCCESS;
-}
-*/
 
 void  _ftree_graphdump  (Tree* tree, const char* file_name, const char* file, const char* func, int line, const char* additional_text) {
 
@@ -755,9 +541,9 @@ void  _ftree_graphdump  (Tree* tree, const char* file_name, const char* file, co
     setvbuf (dump_file, NULL, _IONBF, 0);
 
 
-    fprintf (dump_file, "<pre><h1>");
+    fprintf (dump_file, "<pre><h2>");
     fprintf (dump_file,"%s", additional_text);
-    fprintf (dump_file, "</h1>");
+    fprintf (dump_file, "</h2>");
     fprintf (dump_file, "<h2>Dumping tree at %s in function %s (line %d)...</h2>\n\n", file, func, line);
 
 
@@ -799,9 +585,6 @@ void  _ftree_graphdump  (Tree* tree, const char* file_name, const char* file, co
     fprintf (dump_file, "\n\nin-order:\n\n");
     _fdump_nodes (dump_file, tree, "in");
 
-    fprintf (dump_file, "\n\nas in save file:\n\n");
-    _fprint_node (dump_file, tree->root, 0);
-
 
     fprintf (dump_file, "\n");
 
@@ -837,7 +620,7 @@ void  _tree_generate_graph_describtion  (Tree* tree) {
     tree_iterator_ctor (&tree_iterator, tree, "pre");
 
 
-    printf ("generating %s graph dump...\n", GLOBAL_graph_dump_num);
+    printf ("(tree): generating %s graph dump...\n", GLOBAL_graph_dump_num);
 
 
     char name [MAX_COMMAND_LEN] = "";
@@ -857,7 +640,7 @@ void  _tree_generate_graph_describtion  (Tree* tree) {
     fprintf (graph_file, "    {rank = min; above_node [width = 3, style = invis];}\n\n");
 
 
-    tree_generate_nodes_describtion (tree, graph_file);
+    _tree_generate_nodes_describtion (tree, graph_file);
 
 
     fprintf (graph_file, "\n\n    {rank = max; below_node[width = 3, style = invis]; }\n\n");
@@ -872,7 +655,7 @@ void  _tree_generate_graph_describtion  (Tree* tree) {
 }
 
 
-void  tree_generate_nodes_describtion  (Tree* tree, FILE* file) {
+void  _tree_generate_nodes_describtion  (Tree* tree, FILE* file) {
 
     assert (tree && file);
 
@@ -900,13 +683,13 @@ void  tree_generate_nodes_describtion  (Tree* tree, FILE* file) {
 
                 fprintf (file, "        node%zd_%zd [style = \"rounded, filled\", color=\"#%s\", ", depth, on_level_index, tree_dump_leafclr);
 
-                fprintf (file, "label = \"];\n\n");
+                fprintf (file, "label = \"");
 
                 switch (tree_iterator.current->atom_type) {
 
                     case DAT_OPERATION: fprintf (file, "%d",  tree_iterator.current->element.value.val_operation_code); break;
                     case DAT_CONST:     fprintf (file, "%lf", tree_iterator.current->element.value.val_double);         break;
-                    case DAT_VAR:       fprintf (file, "%s",  tree_iterator.current->element.value.var_str);            break;
+                    case DAT_VARIABLE:  fprintf (file, "%s",  tree_iterator.current->element.value.var_str);            break;
 
                     default: LOG_ERROR (BAD_ARGS); return;
                 }
@@ -923,9 +706,9 @@ void  tree_generate_nodes_describtion  (Tree* tree, FILE* file) {
 
             switch (tree_iterator.current->atom_type) {
 
-                case DAT_OPERATION: fprintf (file, "%d",  tree_iterator.current->element.value.val_operation_code); break;
-                case DAT_CONST:     fprintf (file, "%lf", tree_iterator.current->element.value.val_double);         break;
-                case DAT_VAR:       fprintf (file, "%s",  tree_iterator.current->element.value.var_str);            break;
+                case DAT_OPERATION: fprintf (file, "%s",  _operation_code_to_str (tree_iterator.current->element.value.val_operation_code)); break;
+                case DAT_CONST:     fprintf (file, "%lf",                         tree_iterator.current->element.value.val_double);          break;
+                case DAT_VARIABLE:  fprintf (file, "%s",                          tree_iterator.current->element.value.var_str);             break;
 
                 default: LOG_ERROR (BAD_ARGS); return;
             }
@@ -1005,6 +788,20 @@ void _speak (const char* format, ...) {
     system  (command);
 }
 
+
+const char*  _operation_code_to_str  (Operation_code operation_code) {
+
+    switch (operation_code) {
+
+        case DOC_UNKNOWN: return "DOC_UNKNOWN";
+        case DOC_ADD:  return "+";
+        case DOC_SUB:  return "-";
+        case DOC_MULT: return "*";
+        case DOC_DIV:  return "/";
+
+        default: return "UNKNOWN";
+    }
+}
 
 //--------------------------------------------------
 #endif
