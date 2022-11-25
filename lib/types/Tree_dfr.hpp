@@ -3,6 +3,7 @@
 //--------------------------------------------------
 
 #include "Stack.hpp"
+#include "Elements/Element_atom.hpp"
 //-------------------- SETTINGS --------------------
 #define ON_TREE_ERROR_DUMPING
 #define ON_TREE_AFTER_OPERATION_DUMPIN
@@ -64,7 +65,8 @@ const size_t DEFAULT_COUNTING_SYSTEM = 10;
     }\
 \
 \
-    _tree_show_graph_dump ()
+    tree_atexit_show_graph_sump ()
+
 
 
 #ifdef ON_TREE_ERROR_DUMPING
@@ -152,9 +154,11 @@ struct         Tree_iterator_structure  {
     const char* mode;
 };
 
-Return_code _tree_ctor (Tree* tree, const char* name, const char* file, const char* func, int line);
-Return_code  tree_dtor (Tree* tree);
-Return_code _node_dtor (Node* node);
+Return_code _tree_ctor    (Tree* tree, const char* name, const char* file, const char* func, int line);
+Return_code  tree_dtor    (Tree* tree);
+Return_code  node_dtor    (Node* node);
+Return_code _node_dtor    (Node* node);
+Return_code  node_realloc (Node* old_node, Node* new_node);
 
 Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
 Return_code  tree_push_right (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
@@ -169,6 +173,7 @@ void         _ftree_dump                      (Tree* tree, const char* file_name
 Return_code  _fdump_nodes                     (FILE* dump_file, Tree* tree, const char* mode = "pre");
 void         _fprint_tabs                     (FILE* file, size_t num);
 void         _ftree_graphdump                 (Tree* tree, const char* file_name, const char* file, const char* func, int line, const char* additional_text = "");
+void          tree_atexit_show_graph_sump     (void);
 void         _tree_show_graph_dump            (void);
 void         _tree_generate_graph_describtion (Tree* tree);
 void         _tree_generate_nodes_describtion (Tree* tree, FILE* file);

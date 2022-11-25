@@ -27,8 +27,9 @@
 #define ON_DFR_ERROR_DUMPING
 #define ON_DFR_AFTER_OPERATION_DUMPIN
 
-#define dfr_default_input_file_name "work/test.txt"
-#define dfr_default_dump_file_name  "work/dfr_dump.txt"
+#define dfr_default_input_file_name  "work/test.txt"
+#define dfr_default_output_file_name "work/answer.txt"
+#define dfr_default_dump_file_name   "work/dfr_dump.html"
 
 const size_t MAX_VARIABLE_LEN = 100;
 //--------------------------------------------------
@@ -48,7 +49,7 @@ const size_t MAX_VARIABLE_LEN = 100;
         _fdfr_dump  (x, file, __FILE__, __PRETTY_FUNCTION__, __LINE__, mode, ##__VA_ARGS__);\
     }
 
-#define DFR_DUMP(x, ...) FDFR_DUMP (x, dfr_default_dump_file_name, "unknown", ##__VA_ARGS__)
+#define DFR_DUMP(x, ...) _dfr_dump (x, dfr_default_dump_file_name, __FILE__, __PRETTY_FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 
 #define FDFR_GRAPHDUMP(x, ...)\
@@ -103,6 +104,7 @@ struct         Dfr_info_structure  {
 struct Dfr_structure {
 
     Tree* user_function_tree;
+    Tree* derivative_tree;
 
 
     Dfr_info debug_info;
@@ -113,9 +115,9 @@ const size_t DFR_SIZE = sizeof (Dfr);
 
 Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char* func, int line);
 
-
+void _dfr_dump       (Dfr* dfr, const char* file_name, const char* file, const char* function, int line,                        const char* additional_text = "");
 void _fdfr_dump      (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* file_mode, const char* additional_text = "");
-void _fdfr_graphdump (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* additional_text = "");
+void _fdfr_graphdump (Dfr* dfr, const char* file_name, const char* file, const char* function, int line,                        const char* additional_text = "");
 
 size_t get_operation_priority (Operation_code operation_code);
 
@@ -129,9 +131,39 @@ Return_code read_general  (const char*  string,     Tree*  tree);
 bool is_variable_start (char simbol);
 bool is_variable_mid   (char simbol);
 
-Return_code read_user_function (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
+Return_code dfr_read_user_function (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
+
+Return_code dfr_write_user_function  (Dfr*  dfr,  const char* file_name = dfr_default_output_file_name);
+Return_code dfr_write_derivative     (Dfr* dfr,   const char* file_name = dfr_default_output_file_name);
+
+Return_code write_function           (Tree* tree, const char* file_name, const char* additional_text = "");
+Return_code write_function_dive_left (Tree* tree, Tree_iterator* tree_iterator, FILE* file);
+Return_code write_function_inc       (Tree* tree, Tree_iterator* tree_iterator, FILE* file);
+
+Return_code write_function_check_open_bracket    (Tree_iterator* tree_iterator, const char* next_node_str, FILE* file);
+Return_code write_function_check_closing_bracket (Tree_iterator* tree_iterator,                            FILE* file);
 
 Node* create_node (Atom_type atom_type, ...);
+Node* copy_node   (Node* node);
+
+
+Return_code dfr_calculate_derivative_tree       (Dfr* dfr,   const char* variable);
+Node*       node_calculate_derivative_tree      (Node* node, const char* variable);
+Node*       operation_calculate_derivative_tree (Node* node, const char* variable);
+Node*       variable_calculate_derivative_tree  (Node* node, const char* variable);
+
+
+Return_code tree_fold (Tree* tree);
+
+bool tree_fold_constants      (Tree* tree);
+bool node_fold_constants      (Node* node);
+bool operation_fold_constants (Node* node);
+
+bool tree_fold_neutral      (Tree* tree);
+bool node_fold_neutral      (Node* node);
+bool operation_fold_neutral (Node* node);
+
+
 /*
 
 Return_code  dfr_save (Tree* tree, const char* file_name = tree_default_save_file_name);

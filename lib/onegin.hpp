@@ -59,21 +59,7 @@ void        _swap                  (void* first, void* second, size_t size);
 int         comp                   (const void* a, const void* b);
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+//--------------------------------------------------
 
 
 Return_code  readfile_into_Text  (const char* file_name, Text* ptrtext) {

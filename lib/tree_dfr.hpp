@@ -85,7 +85,35 @@ Return_code  _node_dtor  (Node* node) {
     if (node->left_son)  { try (_node_dtor (node->left_son));  }
     if (node->right_son) { try (_node_dtor (node->right_son)); }
 
+
     free (node);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  node_dtor  (Node* node) {
+
+    if (!node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    free (node);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  node_realloc  (Node* old_node, Node* new_node) {
+
+    if (!old_node || !new_node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    *new_node = *old_node;
+
+
+    node_dtor (old_node);
 
 
     return SUCCESS;
@@ -384,6 +412,7 @@ Return_code  tree_iterator_ctor  (Tree_iterator* tree_iterator, Tree* tree, cons
 
 
     tree_iterator->node_stack = (Stack*) calloc (STACK_SIZE, 1);
+    tree_iterator->current    = tree->root;
     STACK_CTOR (tree_iterator->node_stack);
 
     if (!strcmp (mode, "in")) {
@@ -599,6 +628,16 @@ void  _ftree_graphdump  (Tree* tree, const char* file_name, const char* file, co
 
 
     fclose (dump_file);
+}
+
+
+void  tree_atexit_show_graph_sump  (void) {
+
+    static bool first_time_calling = true;
+
+    if (first_time_calling) { atexit (_tree_show_graph_dump); }
+
+    first_time_calling = false;
 }
 
 
