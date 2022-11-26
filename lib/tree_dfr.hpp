@@ -3,6 +3,8 @@
 
 
 //--------------------------------------------------
+
+
 #include <sys\stat.h>
 #include <locale.h>
 #include <assert.h>
@@ -29,8 +31,6 @@
 #include "types/Tree_dfr.hpp"
 
 
-
-
 //--------------------------------------------------
 
 
@@ -45,10 +45,14 @@ Return_code  _tree_ctor  (Tree* tree, const char* name, const char* file, const 
 
     tree->root = (Node*) calloc (NODE_SIZE, 1);
 
-
+    tree->root->atom_type = DAT_OPERATION;
     tree->root->element   = { _poisoned_Element_value, false };
     tree->root->left_son  = nullptr;
-    tree->root->right_son = nullptr;;
+    tree->root->right_son = nullptr;
+
+    tree->root->isnew       = true;
+    tree->root->birth_line  = 0;
+    tree->root->birth_index = 0;
 
 
     tree->debug_info.name       = name;
@@ -62,6 +66,37 @@ Return_code  _tree_ctor  (Tree* tree, const char* name, const char* file, const 
 
 
     return SUCCESS;
+}
+
+
+Node*  create_node  (Atom_type atom_type, ...) {
+
+    va_list value;
+    va_start (value, atom_type);
+
+
+    Node* node = (Node*) calloc (NODE_SIZE, 1); if (!node) { LOG_ERROR (MEMORY_ERR); return nullptr; }
+
+    node->atom_type = atom_type;
+    node->left_son  = nullptr;
+    node->right_son = nullptr;
+    node->element.poisoned = false;
+
+
+    switch (atom_type) {
+
+        case DAT_OPERATION: node->element.value.val_operation_code = (Operation_code) va_arg(value, int);    break;
+        case DAT_CONST:     node->element.value.val_double         =                  va_arg(value, double); break;
+        case DAT_VARIABLE:  node->element.value.var_str            =                  va_arg(value, char*);  break;
+
+        default: LOG_ERROR (BAD_ARGS); return nullptr;
+    }
+
+
+    va_end (value);
+
+
+    return node;
 }
 
 
@@ -98,6 +133,25 @@ Return_code  node_dtor  (Node* node) {
     if (!node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
+    if (node->atom_type == DAT_VARIABLE) free (node->element.value.var_str);
+
+
+    free (node);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  node_rdtor  (Node* node) {
+
+    if (!node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (node->left_son)  { try (node_rdtor (node->left_son));  }
+    if (node->right_son) { try (node_rdtor (node->right_son)); }
+
+
     free (node);
 
 
@@ -120,7 +174,7 @@ Return_code  node_realloc  (Node* old_node, Node* new_node) {
 }
 
 
-Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type) {
+Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool isnew, ...) {
 
     if (!tree || !node) { LOG_ERROR (BAD_ARGS); FTREE_DUMP (tree); return BAD_ARGS; };
 
@@ -136,16 +190,34 @@ Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
-    node->atom_type           = atom_type;
+    node->left_son->atom_type = atom_type;
     node->left_son->left_son  = nullptr;
     node->left_son->right_son = nullptr;
+
+
+    node->isnew = isnew;
+
+    if (isnew) {
+
+        node->left_son->birth_line  = 0;
+        node->left_son->birth_index = 0;
+    }
+
+    else {
+
+        va_list birth_info;
+        va_start (birth_info, isnew);
+        node->left_son->birth_line  = va_arg (birth_info, size_t);
+        node->left_son->birth_index = va_arg (birth_info, size_t);
+        va_end (birth_info);
+    }
 
 
     return SUCCESS;
 }
 
 
-Return_code  tree_push_right  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type) {
+Return_code  tree_push_right  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool isnew, ...) {
 
     if (!tree || !node) { LOG_ERROR (BAD_ARGS); FTREE_DUMP (tree); return BAD_ARGS; };
 
@@ -161,9 +233,27 @@ Return_code  tree_push_right  (Tree* tree, Node* node, Element_value new_element
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
-    node->atom_type            = atom_type;
+    node->right_son->atom_type = atom_type;
     node->right_son->left_son  = nullptr;
     node->right_son->right_son = nullptr;
+
+
+    node->isnew = isnew;
+
+    if (isnew) {
+
+        node->right_son->birth_line  = 0;
+        node->right_son->birth_index = 0;
+    }
+
+    else {
+
+        va_list birth_info;
+        va_start (birth_info, isnew);
+        node->right_son->birth_line  = va_arg (birth_info, size_t);
+        node->right_son->birth_index = va_arg (birth_info, size_t);
+        va_end (birth_info);
+    }
 
 
     return SUCCESS;
@@ -726,9 +816,9 @@ void  _tree_generate_nodes_describtion  (Tree* tree, FILE* file) {
 
                 switch (tree_iterator.current->atom_type) {
 
-                    case DAT_OPERATION: fprintf (file, "%d",  tree_iterator.current->element.value.val_operation_code); break;
-                    case DAT_CONST:     fprintf (file, "%lf", tree_iterator.current->element.value.val_double);         break;
-                    case DAT_VARIABLE:  fprintf (file, "%s",  tree_iterator.current->element.value.var_str);            break;
+                    case DAT_OPERATION: fprintf (file, "%s",  _operation_code_to_str (tree_iterator.current->element.value.val_operation_code)); break;
+                    case DAT_CONST:     fprintf (file, "%lf",                         tree_iterator.current->element.value.val_double);          break;
+                    case DAT_VARIABLE:  fprintf (file, "%s",                          tree_iterator.current->element.value.var_str);             break;
 
                     default: LOG_ERROR (BAD_ARGS); return;
                 }
@@ -842,5 +932,8 @@ const char*  _operation_code_to_str  (Operation_code operation_code) {
     }
 }
 
+
 //--------------------------------------------------
+
+
 #endif

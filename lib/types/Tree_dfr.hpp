@@ -117,6 +117,10 @@ struct         Tree_Node_structure  {
     Atom_type atom_type;
     Node*     left_son;
     Node*     right_son;
+
+    bool isnew;
+    size_t birth_line;
+    size_t birth_index;
 };
 const size_t NODE_SIZE = sizeof (Node);
 
@@ -156,12 +160,13 @@ struct         Tree_iterator_structure  {
 
 Return_code _tree_ctor    (Tree* tree, const char* name, const char* file, const char* func, int line);
 Return_code  tree_dtor    (Tree* tree);
+Node*        create_node  (Atom_type atom_type, ...);
 Return_code  node_dtor    (Node* node);
 Return_code _node_dtor    (Node* node);
 Return_code  node_realloc (Node* old_node, Node* new_node);
 
-Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
-Return_code  tree_push_right (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type);
+Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool inew, ...);
+Return_code  tree_push_right (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool inew, ...);
 
 size_t tree_depth (Tree* tree);
 

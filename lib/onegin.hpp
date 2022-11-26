@@ -10,6 +10,7 @@
 
 #include <ctype.h>
 #include <sys/stat.h>
+#include <cctype>
 
 #include "logs.hpp"
 #include "types/Text.hpp"

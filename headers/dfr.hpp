@@ -88,6 +88,8 @@ const size_t MAX_VARIABLE_LEN = 100;
 #endif
 
 
+//--------------------------------------------------
+
 
 typedef struct Dfr_structure      Dfr;
 typedef struct Dfr_info_structure Dfr_info;
@@ -101,19 +103,56 @@ struct         Dfr_info_structure  {
     int          birth_line;
 };
 
+enum Buffer_operation_code {
+
+    DBOC_OPEN_BRACKET    = 0,
+    DBOC_CLOSING_BRACKET = 1,
+    DBOC_ADD  = 2,
+    DBOC_SUB  = 3,
+    DBOC_MULT = 4,
+    DBOC_DIV  = 5,
+};
+
+typedef struct Buffer_node {
+
+    Atom_type atom_type;
+
+    union {
+
+        Buffer_operation_code val_buffer_operation_code;
+        double val_double;
+        char*  val_str;
+    };
+
+} Buffer_node; const size_t BUFFER_NODE_SIZE = sizeof (Buffer_node);
+
+typedef struct Dfr_buffer {
+
+    Buffer_node* buffer;
+    size_t len;
+
+} Dfr_buffer; const size_t DFR_BUFFER_SIZE = sizeof (Dfr_buffer);
+
+
 struct Dfr_structure {
 
     Tree* user_function_tree;
     Tree* derivative_tree;
 
+    Dfr_buffer* buffer;
+
 
     Dfr_info debug_info;
-};
 
-const size_t DFR_SIZE = sizeof (Dfr);
+}; const size_t DFR_SIZE = sizeof (Dfr);
+
+
+//--------------------------------------------------
 
 
 Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char* func, int line);
+Return_code  dfr_dtor (Dfr* dfr);
+
 
 void _dfr_dump       (Dfr* dfr, const char* file_name, const char* file, const char* function, int line,                        const char* additional_text = "");
 void _fdfr_dump      (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* file_mode, const char* additional_text = "");
@@ -121,12 +160,12 @@ void _fdfr_graphdump (Dfr* dfr, const char* file_name, const char* file, const c
 
 size_t get_operation_priority (Operation_code operation_code);
 
-Return_code read_number   (const char** string_ptr, Node** node_ptr);
-Return_code read_variable (const char** string_ptr, Node** node_ptr);
-Return_code read_primary  (const char** string_ptr, Node** node_ptr);
-Return_code read_product  (const char** string_ptr, Node** node_ptr);
-Return_code read_sum      (const char** string_ptr, Node** node_ptr);
-Return_code read_general  (const char*  string,     Tree*  tree);
+Return_code read_number   (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_variable (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_sum      (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_general  (Dfr_buffer* dfr_buffer, Tree* tree);
 
 bool is_variable_start (char simbol);
 bool is_variable_mid   (char simbol);
@@ -143,7 +182,6 @@ Return_code write_function_inc       (Tree* tree, Tree_iterator* tree_iterator, 
 Return_code write_function_check_open_bracket    (Tree_iterator* tree_iterator, const char* next_node_str, FILE* file);
 Return_code write_function_check_closing_bracket (Tree_iterator* tree_iterator,                            FILE* file);
 
-Node* create_node (Atom_type atom_type, ...);
 Node* copy_node   (Node* node);
 
 
@@ -163,6 +201,13 @@ bool tree_fold_neutral      (Tree* tree);
 bool node_fold_neutral      (Node* node);
 bool operation_fold_neutral (Node* node);
 
+Return_code  dfr_buffer_ctor       (Dfr_buffer* dfr_buffer);
+Return_code  dfr_buffer_dtor       (Dfr_buffer* dfr_buffer);
+Return_code _dfr_buffer_read       (Dfr_buffer* dfr_buffer, char* str);
+Return_code  read_buffer_operation (char** str_ptr, char* str_max, Buffer_node* buffer_node);
+Return_code  read_buffer_variable  (char** str_ptr, char* str_max, Buffer_node* buffer_node);
+Return_code  read_buffer_number    (char** str_ptr, char* str_max, Buffer_node* buffer_node);
+Return_code  skipspaces            (char** str_ptr, char* str_max);
 
 /*
 

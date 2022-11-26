@@ -10,7 +10,7 @@
 //--------------------------------------------------
 
 
-Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char* func, int line) {
+Return_code  _dfr_ctor  (Dfr* dfr, const char* name, const char* file, const char* func, int line) {
 
     assert ( (file) && (name) && (func) && (line > 0) );
     if (dfr == nullptr) { LOG_ERROR (BAD_ARGS); DFR_ERROR_DUMP (dfr); return BAD_ARGS; }
@@ -21,6 +21,9 @@ Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char*
 
     dfr->derivative_tree =    (Tree*) calloc (TREE_SIZE, 1);
     TREE_CTOR (dfr->derivative_tree);
+
+    dfr->buffer = (Dfr_buffer*) calloc (DFR_BUFFER_SIZE, 1);
+    dfr_buffer_ctor (dfr->buffer);
 
 
     dfr->debug_info.name       = name;
@@ -37,7 +40,22 @@ Return_code _dfr_ctor (Dfr* dfr, const char* name, const char* file, const char*
 }
 
 
-void _dfr_dump (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* additional_text) {
+Return_code  dfr_dtor  (Dfr* dfr) {
+
+    if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (dfr->user_function_tree) free (dfr->user_function_tree);
+    if (dfr->derivative_tree)    free (dfr->derivative_tree);
+
+    dfr_buffer_dtor (dfr->buffer);
+
+
+    return SUCCESS;
+}
+
+
+void  _dfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* additional_text) {
 
     static bool first_time_dumping = true;
 
@@ -58,7 +76,7 @@ void _dfr_dump (Dfr* dfr, const char* file_name, const char* file, const char* f
 }
 
 
-void _fdfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* file_mode, const char* additional_text) {
+void  _fdfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* file_mode, const char* additional_text) {
 
 
     FILE* dump_file = fopen (file_name, file_mode);
@@ -100,7 +118,7 @@ void _fdfr_dump  (Dfr* dfr, const char* file_name, const char* file, const char*
 }
 
 
-size_t get_operation_priority (Operation_code operation_code) {
+size_t  get_operation_priority  (Operation_code operation_code) {
 
     switch (operation_code) {
 
@@ -118,32 +136,23 @@ size_t get_operation_priority (Operation_code operation_code) {
 }
 
 
-Return_code  read_number  (const char** string_ptr, Node** node_ptr) {
+Return_code  read_number  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
-    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    double value = 0;
-
-    const char* old_string = *string_ptr;
-
-    while (**string_ptr >= '0' && **string_ptr <= '9') {
-
-        value = (value * 10) + (**string_ptr - '0');
-        *string_ptr += 1;
-    }
-
-    assert (*string_ptr > old_string);
+    if (!buffer_node_ptr || ((*buffer_node_ptr)->atom_type != DAT_CONST)
+                         || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    (*node_ptr) = create_node (DAT_CONST, value);
+    (*node_ptr) = create_node (DAT_CONST, (*buffer_node_ptr)->val_double);
+
+
+    *buffer_node_ptr += 1;
 
 
     return SUCCESS;
 }
 
 
-bool is_variable_start (char simbol) {
+bool  is_variable_start  (char simbol) {
 
     if ((simbol >= 'a' && simbol <= 'z') ||
         (simbol >= 'A' && simbol <= 'Z') ||
@@ -157,7 +166,7 @@ bool is_variable_start (char simbol) {
 }
 
 
-bool is_variable_mid   (char simbol) {
+bool  is_variable_mid  (char simbol) {
 
     if ((simbol >= '0' && simbol <= '9') ||
         (simbol >= 'a' && simbol <= 'z') ||
@@ -172,88 +181,59 @@ bool is_variable_mid   (char simbol) {
 }
 
 
-Return_code  read_variable  (const char** string_ptr, Node** node_ptr) {
+Return_code  read_variable  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
-    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    char* variable = (char*) calloc (MAX_VARIABLE_LEN + 1, 1);
-    size_t i = 0;
-
-    const char* old_string = *string_ptr;
+    if (!buffer_node_ptr || ((*buffer_node_ptr)->atom_type != DAT_VARIABLE)
+                         || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (is_variable_start (**string_ptr)) {
-
-        variable [i] = **string_ptr;
-        *string_ptr += 1;
-        i += 1;
-    }
-
-    else {
-
-        LOG_ERROR (BAD_ARGS);
-        return BAD_ARGS; 
-    }
+    (*node_ptr) = create_node (DAT_VARIABLE, (*buffer_node_ptr)->val_str);
 
 
-    while (is_variable_mid (**string_ptr) && i < MAX_VARIABLE_LEN) {
-
-        variable [i] = **string_ptr;
-        *string_ptr += 1;
-        i += 1;
-    }
-
-
-    variable [i] = '\0';
-
-    assert (*string_ptr > old_string);
-
-
-    (*node_ptr) = create_node (DAT_VARIABLE, variable);
+    *buffer_node_ptr += 1;
 
 
     return SUCCESS;
 }
 
 
-Return_code  read_primary  (const char** string_ptr, Node** node_ptr) {
+Return_code  read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
-    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (**string_ptr == '(') {
+    if ( (*buffer_node_ptr)->atom_type == DAT_OPERATION &&  (*buffer_node_ptr)->val_buffer_operation_code == DBOC_OPEN_BRACKET) {
 
-        *string_ptr += 1;
+        *buffer_node_ptr += 1;
 
-        read_sum (string_ptr, node_ptr); ///////???]////
+        read_sum (buffer_node_ptr, max_buffer_node, node_ptr);
 
-        *string_ptr += 1;
+        *buffer_node_ptr += 1;
     }
 
-    else if (is_variable_start (**string_ptr)) { read_variable (string_ptr, node_ptr); }
-    else                                       { read_number   (string_ptr, node_ptr); }
+    else if ( (*buffer_node_ptr)->atom_type == DAT_VARIABLE ) { read_variable (buffer_node_ptr, max_buffer_node, node_ptr); }
+    else                                                      { read_number   (buffer_node_ptr, max_buffer_node, node_ptr); }
+
 
     return SUCCESS;
 }
 
 
-Return_code  read_product  (const char** string_ptr, Node** node_ptr) {
+Return_code  read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
-    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    read_primary (string_ptr, node_ptr);
+    read_primary (buffer_node_ptr, max_buffer_node, node_ptr);
 
 
     Node* new_node = nullptr;
 
-    while (**string_ptr == '*' || **string_ptr == '/') {
+    while ( (*buffer_node_ptr)->atom_type == DAT_OPERATION && ( (*buffer_node_ptr)->val_buffer_operation_code == DBOC_MULT ||
+                                                                (*buffer_node_ptr)->val_buffer_operation_code == DBOC_DIV)) {
 
-        char op = **string_ptr;
 
-
-        if (op == '*') {
+        if ((*buffer_node_ptr)->val_buffer_operation_code == DBOC_MULT) {
 
             new_node = create_node (DAT_OPERATION, DOC_MULT);
             new_node->left_son = *node_ptr;
@@ -265,11 +245,11 @@ Return_code  read_product  (const char** string_ptr, Node** node_ptr) {
             new_node->left_son = *node_ptr;
         }
 
-        *string_ptr += 1;
+        *buffer_node_ptr += 1;
 
         *node_ptr = new_node;
 
-        read_primary (string_ptr, &(*node_ptr)->right_son);
+        read_primary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son);
     }
 
 
@@ -277,22 +257,21 @@ Return_code  read_product  (const char** string_ptr, Node** node_ptr) {
 }
 
 
-Return_code  read_sum  (const char** string_ptr, Node** node_ptr) {
+Return_code  read_sum  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
-    if (!string_ptr || !(*string_ptr) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    read_product (string_ptr, node_ptr);
+    read_product (buffer_node_ptr, max_buffer_node, node_ptr);
 
 
     Node* new_node = nullptr;
 
-    while (**string_ptr == '+' || **string_ptr == '-') {
+    while ( (*buffer_node_ptr)->atom_type == DAT_OPERATION && ( (*buffer_node_ptr)->val_buffer_operation_code == DBOC_ADD ||
+                                                                (*buffer_node_ptr)->val_buffer_operation_code == DBOC_SUB)) {
 
-        char op = **string_ptr;
 
-
-        if (op == '+') {
+        if ((*buffer_node_ptr)->val_buffer_operation_code == DBOC_ADD) {
 
             new_node = create_node (DAT_OPERATION, DOC_ADD);
             new_node->left_son = *node_ptr;
@@ -304,11 +283,11 @@ Return_code  read_sum  (const char** string_ptr, Node** node_ptr) {
             new_node->left_son = *node_ptr;
         }
 
-        *string_ptr += 1;
+        *buffer_node_ptr += 1;
 
         *node_ptr = new_node;
 
-        read_product (string_ptr, &(*node_ptr)->right_son);
+        read_product (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son);
     }
 
 
@@ -316,15 +295,18 @@ Return_code  read_sum  (const char** string_ptr, Node** node_ptr) {
 }
 
 
-Return_code  read_general  (const char* string, Tree* tree) {
+Return_code  read_general  (Dfr_buffer* dfr_buffer, Tree* tree) {
 
-    if (!string || !tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    read_sum (&string, &tree->root);
+    if (!dfr_buffer || !tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    assert (*string == '\0');
+    Buffer_node* current_buffer_node = dfr_buffer->buffer;
+
+
+    read_sum (&current_buffer_node, dfr_buffer->buffer + dfr_buffer->len, &tree->root);
+
+
+    assert (current_buffer_node == dfr_buffer->buffer + dfr_buffer->len);
 
 
     return SUCCESS;
@@ -346,41 +328,11 @@ Return_code  dfr_read_user_function  (Dfr* dfr, const char* file_name) {
     fclose (file);
 
 
-    try (read_general (buffer, dfr->user_function_tree));
+    _dfr_buffer_read  ( dfr->buffer, buffer);
+    try (read_general (dfr->buffer, dfr->user_function_tree));
 
 
     return SUCCESS;
-}
-
-
-Node*  create_node  (Atom_type atom_type, ...) {
-
-    va_list value;
-    va_start (value, atom_type);
-
-
-    Node* node = (Node*) calloc (NODE_SIZE, 1); if (!node) { LOG_ERROR (MEMORY_ERR); return nullptr; }
-
-    node->atom_type = atom_type;
-    node->left_son  = nullptr;
-    node->right_son = nullptr;
-    node->element.poisoned = false;
-
-
-    switch (atom_type) {
-
-        case DAT_OPERATION: node->element.value.val_operation_code = (Operation_code) va_arg(value, int);    break;
-        case DAT_CONST:     node->element.value.val_double         =                  va_arg(value, double); break;
-        case DAT_VARIABLE:  node->element.value.var_str            =                  va_arg(value, char*);  break;
-
-        default: LOG_ERROR (BAD_ARGS); return nullptr;
-    }
-
-
-    va_end (value);
-
-
-    return node;
 }
 
 
@@ -649,7 +601,7 @@ Node*  node_calculate_derivative_tree  (Node* node, const char* variable) {
     switch (node->atom_type) {
 
         case DAT_OPERATION: return operation_calculate_derivative_tree (node, variable);
-        case DAT_CONST:     return create_node (DAT_CONST, 0);
+        case DAT_CONST:     return create_node (DAT_CONST, (double) 0);
         case DAT_VARIABLE:  return variable_calculate_derivative_tree  (node, variable);
 
         default: LOG_ERROR (BAD_ARGS); return nullptr;
@@ -986,10 +938,194 @@ Return_code  tree_fold  (Tree* tree) {
 
         folded_anything |= tree_fold_constants (tree);
         folded_anything |= tree_fold_neutral   (tree);
-
-
     }
 
 
     return SUCCESS;
 }
+
+
+Return_code  _dfr_buffer_read  (Dfr_buffer* dfr_buffer, char* str) {
+
+    if (!dfr_buffer || !str) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    dfr_buffer->buffer = (Buffer_node*) calloc (BUFFER_NODE_SIZE * strlen (str), 1);
+
+
+
+    char*  str_max  = str + strlen (str);
+    size_t cur_node = 0;
+
+    skipspaces (&str, str_max);
+
+    while (str < str_max) {
+
+        read_buffer_operation (&str, str_max, &dfr_buffer->buffer [cur_node]);
+        cur_node += 1;
+    }
+
+    dfr_buffer->len = cur_node;
+
+
+    return SUCCESS;
+}
+
+
+Return_code  read_buffer_operation  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+
+    if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (**str_ptr == '(') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_OPEN_BRACKET };    skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == ')') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CLOSING_BRACKET }; skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == '+') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_ADD };             skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == '-') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SUB };             skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == '*') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_MULT };            skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == '/') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_DIV };             skipspaces (str_ptr, str_max); return SUCCESS; }
+
+
+    return read_buffer_variable (str_ptr, str_max, buffer_node);
+}
+
+
+Return_code  read_buffer_variable  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+
+    if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (!is_variable_start (**str_ptr)) return read_buffer_number (str_ptr, str_max, buffer_node);
+
+
+    char* variable = (char*) calloc (MAX_VARIABLE_LEN + 1, 1);
+    variable [0] = **str_ptr; *str_ptr += 1;
+
+
+    size_t variable_index = 1;
+    while (is_variable_mid (**str_ptr)) {
+
+        variable [variable_index] = **str_ptr;
+
+        variable_index += 1;
+        *str_ptr       += 1;
+    }
+
+
+    variable [variable_index] = '\0';
+
+
+    *buffer_node = { DAT_VARIABLE, .val_str = variable };
+
+
+    skipspaces (str_ptr, str_max);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  read_buffer_number  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+
+    if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    double value = 0;
+
+    const char* old_string = *str_ptr;
+
+    while (**str_ptr >= '0' && **str_ptr <= '9') {
+
+        value = (value * 10) + (**str_ptr - '0');
+        *str_ptr += 1;
+    }
+
+    assert (*str_ptr > old_string);
+
+
+    *buffer_node = { DAT_CONST, .val_double = value };
+
+
+    skipspaces (str_ptr, str_max);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  skipspaces  (char** str_ptr, char* str_max) {
+
+    if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    while (isspace (**str_ptr) || (**str_ptr == '/')) {
+
+        if (**str_ptr == '/') {
+
+            *str_ptr += 1;
+
+
+            if (**str_ptr == '/') {
+
+                while (**str_ptr != '\n' && *(*str_ptr + 1) != '\0') {
+
+                    *str_ptr += 1;
+                }
+
+                *str_ptr += 1;
+                continue;
+            }
+
+
+            if (**str_ptr == '*') {
+
+                while ( (*(*str_ptr - 1) != '*' || **str_ptr != '/') 
+                      && *(*str_ptr + 1) != '\0') {
+
+
+                    *str_ptr += 1;
+                }
+
+                *str_ptr += 1;
+                continue;
+            }
+        }
+
+
+        *str_ptr += 1;
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  dfr_buffer_ctor  (Dfr_buffer* dfr_buffer) {
+
+    if (!dfr_buffer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    dfr_buffer->buffer = nullptr;
+    dfr_buffer->len    = 0;
+
+
+    return SUCCESS; 
+}
+
+
+Return_code  dfr_buffer_dtor  (Dfr_buffer* dfr_buffer) {
+
+    if (!dfr_buffer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    for (size_t i = 0; i < dfr_buffer->len; i++) {
+    
+        free (&dfr_buffer->buffer [i]);
+    }
+
+
+    free (dfr_buffer->buffer);
+
+
+    return SUCCESS;
+}
+
