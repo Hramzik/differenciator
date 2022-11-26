@@ -204,10 +204,10 @@ bool operation_fold_neutral (Node* node);
 Return_code  dfr_buffer_ctor       (Dfr_buffer* dfr_buffer);
 Return_code  dfr_buffer_dtor       (Dfr_buffer* dfr_buffer);
 Return_code _dfr_buffer_read       (Dfr_buffer* dfr_buffer, char* str);
-Return_code  read_buffer_operation (char** str_ptr, char* str_max, Buffer_node* buffer_node);
-Return_code  read_buffer_variable  (char** str_ptr, char* str_max, Buffer_node* buffer_node);
-Return_code  read_buffer_number    (char** str_ptr, char* str_max, Buffer_node* buffer_node);
-Return_code  skipspaces            (char** str_ptr, char* str_max);
+Return_code  read_buffer_operation (char** str_ptr, Buffer_node* buffer_node);
+Return_code  read_buffer_variable  (char** str_ptr, Buffer_node* buffer_node);
+Return_code  read_buffer_number    (char** str_ptr, Buffer_node* buffer_node);
+Return_code  skipspaces            (char** str_ptr);
 
 /*
 

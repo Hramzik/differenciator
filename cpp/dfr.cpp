@@ -893,7 +893,6 @@ bool  operation_fold_neutral  (Node* node) {
 
         case DOC_SUB:
 
-            if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT ->CONST, 0) ) { PROMOTE_RIGHT }
             if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { PROMOTE_LEFT }
 
             break;
@@ -957,11 +956,12 @@ Return_code  _dfr_buffer_read  (Dfr_buffer* dfr_buffer, char* str) {
     char*  str_max  = str + strlen (str);
     size_t cur_node = 0;
 
-    skipspaces (&str, str_max);
+    skipspaces (&str);
 
     while (str < str_max) {
-
-        read_buffer_operation (&str, str_max, &dfr_buffer->buffer [cur_node]);
+//printf ("str - %s\n", str);
+        read_buffer_operation (&str, &dfr_buffer->buffer [cur_node]);
+        skipspaces (&str);
         cur_node += 1;
     }
 
@@ -972,29 +972,29 @@ Return_code  _dfr_buffer_read  (Dfr_buffer* dfr_buffer, char* str) {
 }
 
 
-Return_code  read_buffer_operation  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+Return_code  read_buffer_operation  (char** str_ptr, Buffer_node* buffer_node) {
 
     if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (**str_ptr == '(') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_OPEN_BRACKET };    skipspaces (str_ptr, str_max); return SUCCESS; }
-    if (**str_ptr == ')') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CLOSING_BRACKET }; skipspaces (str_ptr, str_max); return SUCCESS; }
-    if (**str_ptr == '+') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_ADD };             skipspaces (str_ptr, str_max); return SUCCESS; }
-    if (**str_ptr == '-') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SUB };             skipspaces (str_ptr, str_max); return SUCCESS; }
-    if (**str_ptr == '*') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_MULT };            skipspaces (str_ptr, str_max); return SUCCESS; }
-    if (**str_ptr == '/') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_DIV };             skipspaces (str_ptr, str_max); return SUCCESS; }
+    if (**str_ptr == '(') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_OPEN_BRACKET };    return SUCCESS; }
+    if (**str_ptr == ')') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CLOSING_BRACKET }; return SUCCESS; }
+    if (**str_ptr == '+') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_ADD };             return SUCCESS; }
+    if (**str_ptr == '-') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SUB };             return SUCCESS; }
+    if (**str_ptr == '*') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_MULT };            return SUCCESS; }
+    if (**str_ptr == '/') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_DIV };             return SUCCESS; }
 
 
-    return read_buffer_variable (str_ptr, str_max, buffer_node);
+    return read_buffer_variable (str_ptr, buffer_node);
 }
 
 
-Return_code  read_buffer_variable  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+Return_code  read_buffer_variable  (char** str_ptr, Buffer_node* buffer_node) {
 
     if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (!is_variable_start (**str_ptr)) return read_buffer_number (str_ptr, str_max, buffer_node);
+    if (!is_variable_start (**str_ptr)) return read_buffer_number (str_ptr, buffer_node);
 
 
     char* variable = (char*) calloc (MAX_VARIABLE_LEN + 1, 1);
@@ -1017,14 +1017,11 @@ Return_code  read_buffer_variable  (char** str_ptr, char* str_max, Buffer_node* 
     *buffer_node = { DAT_VARIABLE, .val_str = variable };
 
 
-    skipspaces (str_ptr, str_max);
-
-
     return SUCCESS;
 }
 
 
-Return_code  read_buffer_number  (char** str_ptr, char* str_max, Buffer_node* buffer_node) {
+Return_code  read_buffer_number  (char** str_ptr, Buffer_node* buffer_node) {
 
     if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1045,14 +1042,11 @@ Return_code  read_buffer_number  (char** str_ptr, char* str_max, Buffer_node* bu
     *buffer_node = { DAT_CONST, .val_double = value };
 
 
-    skipspaces (str_ptr, str_max);
-
-
     return SUCCESS;
 }
 
 
-Return_code  skipspaces  (char** str_ptr, char* str_max) {
+Return_code  skipspaces  (char** str_ptr) {
 
     if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1061,10 +1055,7 @@ Return_code  skipspaces  (char** str_ptr, char* str_max) {
 
         if (**str_ptr == '/') {
 
-            *str_ptr += 1;
-
-
-            if (**str_ptr == '/') {
+            if (*(*str_ptr + 1) == '/') {
 
                 while (**str_ptr != '\n' && *(*str_ptr + 1) != '\0') {
 
@@ -1075,8 +1066,7 @@ Return_code  skipspaces  (char** str_ptr, char* str_max) {
                 continue;
             }
 
-
-            if (**str_ptr == '*') {
+            if (*(*str_ptr + 1) == '*') {
 
                 while ( (*(*str_ptr - 1) != '*' || **str_ptr != '/') 
                       && *(*str_ptr + 1) != '\0') {
@@ -1088,6 +1078,8 @@ Return_code  skipspaces  (char** str_ptr, char* str_max) {
                 *str_ptr += 1;
                 continue;
             }
+
+            break;
         }
 
 

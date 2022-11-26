@@ -160,9 +160,9 @@ struct         Tree_iterator_structure  {
 
 Return_code _tree_ctor    (Tree* tree, const char* name, const char* file, const char* func, int line);
 Return_code  tree_dtor    (Tree* tree);
+Return_code _node_dtor    (Node* node);
 Node*        create_node  (Atom_type atom_type, ...);
 Return_code  node_dtor    (Node* node);
-Return_code _node_dtor    (Node* node);
 Return_code  node_realloc (Node* old_node, Node* new_node);
 
 Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool inew, ...);

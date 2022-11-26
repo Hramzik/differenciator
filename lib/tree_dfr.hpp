@@ -143,22 +143,6 @@ Return_code  node_dtor  (Node* node) {
 }
 
 
-Return_code  node_rdtor  (Node* node) {
-
-    if (!node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    if (node->left_son)  { try (node_rdtor (node->left_son));  }
-    if (node->right_son) { try (node_rdtor (node->right_son)); }
-
-
-    free (node);
-
-
-    return SUCCESS;
-}
-
-
 Return_code  node_realloc  (Node* old_node, Node* new_node) {
 
     if (!old_node || !new_node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
