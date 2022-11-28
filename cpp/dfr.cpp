@@ -424,8 +424,8 @@ Return_code  write_function  (Tree* tree, const char* file_name, const char* add
         switch (tree_iterator.current->atom_type) {
 
             case DAT_OPERATION: fprintf (file, " %s ", _operation_code_to_str (tree_iterator.current->element.value.val_operation_code)); break;
-            case DAT_CONST:     fprintf (file, "%.1lf",                      tree_iterator.current->element.value.val_double);          break;
-            case DAT_VARIABLE:  fprintf (file, "%s",                         tree_iterator.current->element.value.var_str);             break;
+            case DAT_CONST:     fprintf (file, "%.1lf",                        tree_iterator.current->element.value.val_double);          break;
+            case DAT_VARIABLE:  fprintf (file, "%s",                           tree_iterator.current->element.value.var_str);             break;
 
             default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
         }
@@ -535,6 +535,29 @@ Return_code  write_function_inc  (Tree* tree, Tree_iterator* tree_iterator, FILE
 }
 
 
+//pattern: c1 op_left (c2 op_right c3), can we leave the parenthesis?
+bool  are_associative  (Operation_code op_left, Operation_code op_right) {
+
+    if (get_operation_priority (op_left) < get_operation_priority (op_right)) return true;
+    if (get_operation_priority (op_left) > get_operation_priority (op_right)) return false;
+
+
+    //same priority case:
+    if (op_left == DOC_ADD) {
+
+        if (op_right == DOC_ADD || op_right == DOC_SUB)  return true;
+    }
+
+    if (op_left == DOC_MULT) {
+
+        if (op_right == DOC_MULT || op_right == DOC_DIV) return true;
+    }
+
+
+    return false;
+}
+
+
 Return_code  write_function_check_open_bracket  (Tree_iterator* tree_iterator, const char* next_node_str, FILE* file) {
 
     if (!tree_iterator || !file || !next_node_str || (stricmp (next_node_str, "L") && stricmp (next_node_str, "R")) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
@@ -547,8 +570,7 @@ Return_code  write_function_check_open_bracket  (Tree_iterator* tree_iterator, c
 
 
     if (tree_iterator->current->atom_type == DAT_OPERATION && son->atom_type == DAT_OPERATION &&
-           get_operation_priority (tree_iterator->current->element.value.val_operation_code) >
-           get_operation_priority (son->                   element.value.val_operation_code)) {
+        !are_associative (tree_iterator->current->element.value.val_operation_code, son->element.value.val_operation_code)) {
 
         fprintf (file, "(");
     }
@@ -570,8 +592,7 @@ Return_code  write_function_check_closing_bracket  (Tree_iterator* tree_iterator
 
 
     if (son->atom_type == DAT_OPERATION && parent->atom_type == DAT_OPERATION &&
-           get_operation_priority (son   ->element.value.val_operation_code) <
-           get_operation_priority (parent->element.value.val_operation_code)) {
+        !are_associative (parent->element.value.val_operation_code, son->element.value.val_operation_code)) {
 
         fprintf (file, ")");
     }

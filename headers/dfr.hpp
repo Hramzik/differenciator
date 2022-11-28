@@ -159,6 +159,8 @@ void _fdfr_dump      (Dfr* dfr, const char* file_name, const char* file, const c
 void _fdfr_graphdump (Dfr* dfr, const char* file_name, const char* file, const char* function, int line,                        const char* additional_text = "");
 
 size_t get_operation_priority (Operation_code operation_code);
+bool   are_associative        (Operation_code op_left, Operation_code op_right);
+
 
 Return_code read_number   (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_variable (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
