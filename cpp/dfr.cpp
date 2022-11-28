@@ -620,7 +620,7 @@ Node*  operation_calculate_derivative_tree  (Node* node, const char* variable) {
 
         case DOC_UNKNOWN:
 
-            LOG_ERROR (BAD_ARGS); return nullptr;
+            LOG_ERROR (BAD_ARGS); root_node = create_node (DAT_OPERATION, DOC_UNKNOWN); break;
 
         case DOC_ADD:
 

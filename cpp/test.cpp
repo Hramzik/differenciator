@@ -1,16 +1,16 @@
 
 #include "stdio.h"
-#include "../lib/types/Elements/Element_atom.hpp"
-#include "../lib/types/Elements/use_Element_atom.hpp"
+
+#define test(...) test_num##__VA_OPT__(_with_arguments) (__VA_ARGS__)
+
+#define test_num(...) printf ("no args given\n");
+#define test_num_with_arguments(...) printf ("got some args!");
 
 
 int main (void) {
 
 
-    Atom a = { .val_double = 66666 };
-
-
-    printf ("%d\n%lf\n%p", a.val_operation_code, a.val_double, a.var_str);
+    test ();
 
 
     return 0;

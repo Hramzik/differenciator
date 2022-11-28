@@ -133,9 +133,6 @@ Return_code  node_dtor  (Node* node) {
     if (!node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (node->atom_type == DAT_VARIABLE) free (node->element.value.var_str);
-
-
     free (node);
 
 
