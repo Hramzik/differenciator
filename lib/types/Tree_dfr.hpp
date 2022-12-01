@@ -158,12 +158,14 @@ struct         Tree_iterator_structure  {
     const char* mode;
 };
 
-Return_code _tree_ctor    (Tree* tree, const char* name, const char* file, const char* func, int line);
-Return_code  tree_dtor    (Tree* tree);
-Return_code _node_dtor    (Node* node);
-Node*        create_node  (Atom_type atom_type, ...);
-Return_code  node_dtor    (Node* node);
-Return_code  node_realloc (Node* old_node, Node* new_node);
+Return_code _tree_ctor      (Tree* tree, const char* name, const char* file, const char* func, int line);
+Return_code  tree_kill_root (Tree* tree);
+Return_code  tree_kill_tree (Tree* tree);
+Return_code  tree_dtor      (Tree* tree);
+Return_code _node_dtor      (Node* node);
+Node*        create_node    (Atom_type atom_type, ...);
+Return_code  node_dtor      (Node* node);
+Return_code  node_realloc   (Node* old_node, Node* new_node);
 
 Return_code  tree_push_left  (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool inew, ...);
 Return_code  tree_push_right (Tree* tree, Node* node, Element_value new_element_value, Atom_type atom_type, bool inew, ...);

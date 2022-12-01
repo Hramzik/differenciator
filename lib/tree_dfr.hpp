@@ -100,6 +100,31 @@ Node*  create_node  (Atom_type atom_type, ...) {
 }
 
 
+Return_code  tree_kill_root  (Tree* tree) {
+
+    if (!tree || !tree->root || tree->root->left_son || tree->root->right_son) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    free (tree->root);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tree_kill_tree  (Tree* tree) {
+
+    if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    free (tree);
+
+
+    return SUCCESS;
+}
+
+
+
 Return_code  tree_dtor  (Tree* tree) {
 
     ASSERT_TREE_OK (tree);
