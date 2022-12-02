@@ -124,7 +124,6 @@ Return_code  tree_kill_tree  (Tree* tree) {
 }
 
 
-
 Return_code  tree_dtor  (Tree* tree) {
 
     ASSERT_TREE_OK (tree);

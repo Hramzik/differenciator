@@ -24,6 +24,9 @@
 
 
 //-------------------- SETTINGS --------------------
+#define USER_FUNCTION_NAME "f"
+
+
 #define ON_DFR_ERROR_DUMPING
 #define ON_DFR_AFTER_OPERATION_DUMPIN
 
@@ -210,31 +213,54 @@ Return_code tex_write_node      (Node* node, FILE* file);
 Return_code tex_write_operation (Node* node, FILE* file);
 Return_code tex_write_check_open_bracket    (Node* left, Node* right, FILE* file);
 Return_code tex_write_check_closing_bracket (Node* left, Node* right, FILE* file);
-Return_code tex_generate_output (Dfr* dfr, const char* file_name = dfr_default_tex_file_name);
-Return_code tex_write_preamble  (FILE* file);
-Return_code tex_write_end       (FILE* file);
-const char* tex_get_phrase      (void);
-Return_code tex_write_introduction (Dfr* dfr, FILE* file);
+
+Return_code tex_write_evaluation_introduction    (FILE* file, size_t derivative_num, double value);
+Return_code tex_write_evaluation_ending          (FILE* file, size_t derivative_num, double value, Tree* answer);
+Return_code tex_write_taylor_introduction        (FILE* file, size_t depth, const char* variable);
+Return_code tex_write_taylor_ending              (Dfr* dfr, FILE* file, size_t depth, const char* variable);
+Return_code tex_write_derivative_introduction    (FILE* file, const char* variable, size_t derivative_num);
+Return_code tex_write_derivative_ending          (Dfr* dfr, FILE* file, const char* variable, size_t derivative_num);
+Return_code tex_write_user_function_introduction (FILE* file, const char* variable);
+Return_code tex_write_user_function_ending       (FILE* file, Dfr* dfr, const char* variable);
 
 
-Node* copy_node   (Node* node);
+const char* tex_get_phrase          (void);
+Return_code tex_write_function_name (FILE* file, size_t derivative_num);
+
+Return_code tex_generate_output     (Dfr* dfr, const char* variable, size_t depth, const char* file_name = dfr_default_tex_file_name);
+Return_code tex_write_preamble      (FILE* file);
+Return_code tex_write_end           (FILE* file);
+Return_code tex_write_introduction  (Dfr* dfr, const char* variable, FILE* file);
+Return_code tex_write_user_function (FILE* file, Dfr* dfr, const char* variable);
+Return_code tex_write_derivative    (Dfr* dfr, const char* variable, FILE* file);
+Return_code tex_write_taylor        (Dfr* dfr, const char* variable, FILE* file, size_t depth);
 
 
-Return_code dfr_calculate_derivative_tree       (Dfr* dfr,   const char* variable, size_t derivative_num = 1);
-Node*       node_calculate_derivative_tree      (Node* node, const char* variable);
-Node*       operation_calculate_derivative_tree (Node* node, const char* variable);
-Node*       variable_calculate_derivative_tree  (Node* node, const char* variable);
+Return_code node_get_tex_len      (Node* node, double* len_ptr, double len_coefficient);
+Return_code const_get_tex_len     (double value, double* len_ptr, double len_coefficient);
+Return_code variable_get_tex_len  (const char* variable, double* len_ptr, double len_coefficient);
+Return_code operation_get_tex_len (Node* node, double* len_ptr, double len_coefficient);
 
-Tree*       tree_evaluate   (Tree* tree, const char* variable, double value);
+
+Node* copy_node (Node* node);
+Tree* copy_tree (Tree* tree);
+
+
+Return_code dfr_calculate_derivative       (Dfr* dfr,   const char* variable, size_t derivative_num = 1, bool silent = true, FILE* file = nullptr);
+Node*       node_calculate_derivative      (Node* node, const char* variable);
+Node*       operation_calculate_derivative (Node* node, const char* variable);
+Node*       variable_calculate_derivative  (Node* node, const char* variable);
+
+Tree*       tree_evaluate   (Tree* tree, const char* variable, double value, bool silent = true, FILE* file = nullptr);
 Return_code tree_substitute (Tree* tree, const char* variable, double value);
 Return_code node_substitute (Node* node, const char* variable, double value);
 
-Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth);
-Return_code  dfr_ensure_derivative (Dfr* dfr, const char* variable, size_t n);
-size_t       factorial             (size_t n);
+Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth, bool silent = true, FILE* file = nullptr);
+Return_code  dfr_ensure_derivative (Dfr* dfr, const char* variable, size_t n, bool silent = true, FILE* file = nullptr);
+double       factorial             (size_t n);
 
 
-Return_code tree_fold (Tree* tree);
+Return_code tree_fold (Tree* tree, bool silent = true, FILE* file = nullptr);
 
 bool tree_fold_constants      (Tree* tree);
 bool node_fold_constants      (Node* node);
