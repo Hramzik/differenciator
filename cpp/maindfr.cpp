@@ -13,7 +13,7 @@ int main (void) {
     printf ("read return code - %d\n", dfr_read_user_function (&dfr));
 
 
-    tex_generate_output (&dfr, "x", 2);
+    tex_generate_output (&dfr, "x", 3);
 
 
     return 0;

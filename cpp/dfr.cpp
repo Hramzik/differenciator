@@ -548,7 +548,7 @@ Return_code  write_function  (Tree* tree, const char* file_name, const char* add
     tree_iterator_ctor (&tree_iterator, tree, "my_mode");
 
 
-    write_function_dive_left (tree, &tree_iterator, file);
+    write_function_dive_left (file, tree, &tree_iterator);
 
 
     do {
@@ -562,7 +562,7 @@ Return_code  write_function  (Tree* tree, const char* file_name, const char* add
             default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
         }
 
-    } while (!write_function_inc (tree, &tree_iterator, file));
+    } while (!write_function_inc (file, tree, &tree_iterator));
 
 
     first_time_writing = false;
@@ -575,7 +575,7 @@ Return_code  write_function  (Tree* tree, const char* file_name, const char* add
 }
 
 
-Return_code  write_function_dive_left  (Tree* tree, Tree_iterator* tree_iterator, FILE* file) {
+Return_code  write_function_dive_left  (FILE* file, Tree* tree, Tree_iterator* tree_iterator) {
 
     if (!tree || !tree_iterator || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -586,7 +586,7 @@ Return_code  write_function_dive_left  (Tree* tree, Tree_iterator* tree_iterator
 
     while (tree_iterator->current->left_son) {
 
-        write_function_check_open_bracket (tree_iterator, "L", file);
+        write_function_check_open_bracket (file, tree_iterator, "L");
 
 
         tree_iterator->current = tree_iterator->current->left_son;
@@ -599,14 +599,14 @@ Return_code  write_function_dive_left  (Tree* tree, Tree_iterator* tree_iterator
 }
 
 
-Return_code  write_function_inc  (Tree* tree, Tree_iterator* tree_iterator, FILE* file) {
+Return_code  write_function_inc  (FILE* file, Tree* tree, Tree_iterator* tree_iterator) {
 
     if (!tree || !tree_iterator || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     if (tree_iterator->current->right_son) {
 
-        write_function_check_open_bracket (tree_iterator, "R", file);
+        write_function_check_open_bracket (file, tree_iterator, "R");
 
 
         tree_iterator->current = tree_iterator->current->right_son;
@@ -615,7 +615,7 @@ Return_code  write_function_inc  (Tree* tree, Tree_iterator* tree_iterator, FILE
 
         while (tree_iterator->current->left_son) {
 
-            write_function_check_open_bracket (tree_iterator, "L", file);
+            write_function_check_open_bracket (file, tree_iterator, "L");
 
 
             tree_iterator->current = tree_iterator->current->left_son;
@@ -631,7 +631,7 @@ Return_code  write_function_inc  (Tree* tree, Tree_iterator* tree_iterator, FILE
     if (tree_iterator->depth == 0) { return BAD_ARGS; } //дошли до корня, справа нет узлов
 
 
-    write_function_check_closing_bracket (tree_iterator, file);
+    write_function_check_closing_bracket (file, tree_iterator);
 
 
     Node* old = tree_iterator->current;
@@ -647,7 +647,7 @@ Return_code  write_function_inc  (Tree* tree, Tree_iterator* tree_iterator, FILE
         if (tree_iterator->depth == 0) { return BAD_ARGS; } // already was at last element
 
 
-        write_function_check_closing_bracket (tree_iterator, file);
+        write_function_check_closing_bracket (file, tree_iterator);
 
 
         old = tree_iterator->current;
@@ -687,7 +687,7 @@ bool  are_associative  (Operation_code op_left, Operation_code op_right) {
 }
 
 
-Return_code  write_function_check_open_bracket  (Tree_iterator* tree_iterator, const char* next_node_str, FILE* file) {
+Return_code  write_function_check_open_bracket  (FILE* file, Tree_iterator* tree_iterator, const char* next_node_str) {
 
     if (!tree_iterator || !file || !next_node_str || (stricmp (next_node_str, "L") && stricmp (next_node_str, "R")) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -709,7 +709,7 @@ Return_code  write_function_check_open_bracket  (Tree_iterator* tree_iterator, c
 }
 
 
-Return_code  write_function_check_closing_bracket  (Tree_iterator* tree_iterator, FILE* file) {
+Return_code  write_function_check_closing_bracket  (FILE* file, Tree_iterator* tree_iterator) {
 
     if (!tree_iterator || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -771,7 +771,7 @@ Return_code  dfr_calculate_derivative  (Dfr* dfr, const char* variable, size_t d
     dfr->derivative_trees_array [derivative_num] = derivative_tree;
 
 
-    if (!silent) tex_write_derivative_ending (dfr, file, variable, derivative_num);
+    if (!silent) tex_write_derivative_ending (file, dfr, variable, derivative_num);
 
 
     return SUCCESS;
@@ -1113,7 +1113,12 @@ Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
 
 
 
-    if (!silent) tex_write_tree (tree, file);
+    if (!silent) {
+
+        tex_write_tree (file, tree);
+        fprintf (file, "$$\n");
+    } 
+
 
 
     bool  folded_anything_now = true;
@@ -1128,8 +1133,9 @@ Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
 
         if (!silent && folded_anything_now) {
 
-            fprintf (file, " = ");
-            tex_write_tree (tree, file);
+            fprintf (file, "$$ = ");
+            tex_write_tree (file, tree);
+            fprintf (file, "$$\n");
         }
     }
 
@@ -1329,7 +1335,7 @@ Tree*  tree_evaluate  (Tree* tree, const char* variable, double value, bool sile
 
 
     answer->root = copy_node (tree->root);
-    tree_substitute (answer, variable, value);
+    tree_substitute_variable (answer, variable, value);
 
 
     tree_fold (answer, silent, file);
@@ -1339,7 +1345,7 @@ Tree*  tree_evaluate  (Tree* tree, const char* variable, double value, bool sile
 }
 
 
-Return_code  tree_substitute  (Tree* tree, const char* variable, double value) {
+Return_code  tree_substitute_variable  (Tree* tree, const char* variable, double value) {
 
     if (!tree || ! variable || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1347,14 +1353,14 @@ Return_code  tree_substitute  (Tree* tree, const char* variable, double value) {
     if (!tree->root) return SUCCESS;
 
 
-    node_substitute (tree->root, variable, value);
+    node_substitute_variable (tree->root, variable, value);
 
 
     return SUCCESS;
 }
 
 
-Return_code  node_substitute  (Node* node, const char* variable, double value) {
+Return_code  node_substitute_variable  (Node* node, const char* variable, double value) {
 
     if (!node || ! variable || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1366,8 +1372,8 @@ Return_code  node_substitute  (Node* node, const char* variable, double value) {
     }
 
 
-    if (node-> left_son) node_substitute (node-> left_son, variable, value);
-    if (node->right_son) node_substitute (node->right_son, variable, value);
+    if (node-> left_son) node_substitute_variable (node-> left_son, variable, value);
+    if (node->right_son) node_substitute_variable (node->right_son, variable, value);
 
 
     return SUCCESS;
@@ -1424,7 +1430,7 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth
     }
 
 
-    if (!silent) tex_write_taylor_ending (dfr, file, depth, variable);
+    if (!silent) tex_write_taylor_ending (file, dfr, depth, variable);
 
 
     return SUCCESS;
@@ -1469,28 +1475,54 @@ double  factorial  (size_t n) {
 }
 
 
-Return_code  tex_write_tree  (Tree* tree, FILE* file) {
+Return_code  tex_write_tree  (FILE* file, Tree* tree) {
 
     if (!tree || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    tex_write_node (tree->root, file);
+    Tree_substitution substitutions = {};
+    tree_substitution_ctor (&substitutions);
+
+    tree_substitute (tree, &substitutions);
+
+
+    tex_write_node (file, tree->root, &substitutions);
+
+
+    tex_write_substitutions_decoding (file, &substitutions);
+
+
+    tree_substitution_dtor (&substitutions);
 
 
     return SUCCESS;
 }
 
 
-Return_code  tex_write_node  (Node* node, FILE* file) {
+Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substitutions) {
 
     if (!node || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+
+    if (substitutions) {
+
+        Node_substitution* substitution = get_tex_substitution (substitutions, node);
+        if (substitution) {
+
+            tex_write_substitution (file, substitution);
+            return SUCCESS;
+        }
+    }
+
+
 
 
     switch (node->atom_type) {
 
         case DAT_CONST:     fprintf (file, "%.1lf", node->element.value.val_double); return SUCCESS;
         case DAT_VARIABLE:  fprintf (file, "%s",    node->element.value.var_str);    return SUCCESS;
-        case DAT_OPERATION: tex_write_operation (node, file);                        return SUCCESS;
+        case DAT_OPERATION: tex_write_operation (file, node, substitutions);         return SUCCESS;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
@@ -1501,19 +1533,20 @@ Return_code  tex_write_node  (Node* node, FILE* file) {
 
 
 #define WRITE_LEFT\
-        tex_write_check_open_bracket    (node->left_son, node, file);\
-        tex_write_node                  (node->left_son,       file);\
-        tex_write_check_closing_bracket (node->left_son, node, file);
+        tex_write_check_open_bracket    (file, node->left_son, node);\
+        tex_write_node                  (file, node->left_son, substitutions);\
+        tex_write_check_closing_bracket (file, node->left_son, node);
 
 #define WRITE_RIGHT\
-        tex_write_check_open_bracket    (node, node->right_son, file);\
-        tex_write_node                  (node->right_son,       file);\
-        tex_write_check_closing_bracket (node, node->right_son, file);
+        tex_write_check_open_bracket    (file, node, node->right_son);\
+        tex_write_node                  (file, node->right_son, substitutions);\
+        tex_write_check_closing_bracket (file, node, node->right_son);
+
 
 //--------------------------------------------------
 
 
-Return_code  tex_write_operation  (Node* node, FILE* file) {
+Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* substitutions) {
 
     if (!node || !file || node->atom_type != DAT_OPERATION) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1544,9 +1577,9 @@ Return_code  tex_write_operation  (Node* node, FILE* file) {
         case DOC_DIV:
 
             fprintf (file, "\\frac { ");
-            tex_write_node (node-> left_son, file);
+            tex_write_node (file, node-> left_son, substitutions);
             fprintf (file, " } { ");
-            tex_write_node (node->right_son, file);
+            tex_write_node (file, node->right_son, substitutions);
             fprintf (file, " }");
             return SUCCESS;
 
@@ -1557,7 +1590,18 @@ Return_code  tex_write_operation  (Node* node, FILE* file) {
 }
 
 
-Return_code  tex_write_check_open_bracket  (Node* left, Node* right, FILE* file) {
+//--------------------------------------------------
+
+
+
+#undef WRITE_LEFT
+#undef WRITE_RIGHT
+
+
+//--------------------------------------------------
+
+
+Return_code  tex_write_check_open_bracket  (FILE* file, Node* left, Node* right) {
 
     if (!left || !right || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1572,7 +1616,7 @@ Return_code  tex_write_check_open_bracket  (Node* left, Node* right, FILE* file)
 }
 
 
-Return_code  tex_write_check_closing_bracket  (Node* left, Node* right, FILE* file) {
+Return_code  tex_write_check_closing_bracket  (FILE* file, Node* left, Node* right) {
 
     if (!left || !right || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1605,10 +1649,10 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, size_t depth,
 
 
     tex_write_preamble      (file);
-    tex_write_introduction  (dfr, variable, file);
+    tex_write_introduction  (file, dfr, variable);
     tex_write_user_function (file, dfr, variable);
-    tex_write_derivative    (dfr, variable, file);
-    tex_write_taylor        (dfr, variable, file, depth);
+    tex_write_derivative    (file, dfr, variable);
+    tex_write_taylor        (file, dfr, variable, depth);
     tex_write_end           (file);
 
 
@@ -1683,7 +1727,7 @@ const char*  tex_get_phrase  (void) {
 }
 
 
-Return_code  tex_write_introduction  (Dfr* dfr, const char* variable, FILE* file) {
+Return_code  tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable) {
 
     if (!dfr || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1694,7 +1738,7 @@ Return_code  tex_write_introduction  (Dfr* dfr, const char* variable, FILE* file
 
     fprintf (file, "$$");
     fprintf (file, "%s(%s) = ", USER_FUNCTION_NAME, variable);
-    tex_write_tree (dfr->user_function_tree, file);
+    tex_write_tree (file, dfr->user_function_tree);
     fprintf (file, "$$\n\n");
 
 
@@ -1702,7 +1746,7 @@ Return_code  tex_write_introduction  (Dfr* dfr, const char* variable, FILE* file
 }
 
 
-Return_code  tex_write_derivative  (Dfr* dfr, const char* variable, FILE* file) {
+Return_code  tex_write_derivative  (FILE* file, Dfr* dfr, const char* variable) {
 
     if (!dfr || !variable || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1749,7 +1793,7 @@ Return_code  tex_write_function_name  (FILE* file, size_t derivative_num) {
 }
 
 
-Return_code  tex_write_taylor  (Dfr* dfr, const char* variable, FILE* file, size_t depth) {
+Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, size_t depth) {
 
     if (!dfr || !variable || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1790,14 +1834,14 @@ Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, do
     if (!file || isnan (value) || !answer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "$$\n");
+    fprintf (file, "\n");
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "итак, \n");
     fprintf (file, "\\end {flushleft}\n\n");
     fprintf (file, "$$");
     tex_write_function_name (file, derivative_num);
     fprintf (file, "(%.1lf) = ", value);
-    tex_write_tree (answer, file);
+    tex_write_tree (file, answer);
     fprintf (file, "$$\n\n");
 
 
@@ -1822,7 +1866,7 @@ Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const cha
 }
 
 
-Return_code  tex_write_taylor_ending  (Dfr* dfr, FILE* file, size_t depth, const char* variable) {
+Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const char* variable) {
 
     if (!dfr || !file || !variable || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1833,12 +1877,12 @@ Return_code  tex_write_taylor_ending  (Dfr* dfr, FILE* file, size_t depth, const
     fprintf (file, "\n\n$$");
 
 
-    tex_write_tree (dfr->taylor [0], file);
+    tex_write_tree (file, dfr->taylor [0]);
 
     for (size_t i = 1; i <= depth; i++) {
 
         fprintf (file, " + (");
-        try (tex_write_tree (dfr->taylor [i], file));
+        try (tex_write_tree (file, dfr->taylor [i]));
         fprintf (file, ") * %s^%zd", variable, i);
 
     }
@@ -1877,19 +1921,19 @@ Return_code  tex_write_derivative_introduction  (FILE* file, const char* variabl
 }
 
 
-Return_code  tex_write_derivative_ending  (Dfr* dfr, FILE* file, const char* variable, size_t derivative_num) {
+Return_code  tex_write_derivative_ending  (FILE* file, Dfr* dfr, const char* variable, size_t derivative_num) {
 
     if (!dfr || !file || !variable || !dfr->derivative_trees_array [derivative_num]) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "$$\n");
+    fprintf (file, "\n");
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "итак, \n");
     fprintf (file, "\\end {flushleft}\n\n");
     fprintf (file, "$$");
     tex_write_function_name (file, derivative_num);
     fprintf (file, "(%s) = ", variable);
-    tex_write_tree (dfr->derivative_trees_array [derivative_num], file);
+    tex_write_tree (file, dfr->derivative_trees_array [derivative_num]);
     fprintf (file, "$$\n\n");
 
 
@@ -1941,10 +1985,10 @@ Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* 
     if (!file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "$$\nитак, \n$$");
+    fprintf (file, "\nитак, \n$$");
     tex_write_function_name (file, 0);
     fprintf (file, "(%s) = ", variable);
-    tex_write_tree (dfr->derivative_trees_array [0], file);
+    tex_write_tree (file, dfr->derivative_trees_array [0]);
     fprintf (file, "$$\n\n");
 
 
@@ -1952,23 +1996,37 @@ Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* 
 }
 
 
-Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coefficient) {
+Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitution_list) {
 
     if (!node || !len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
+
+    if (substitution_list) {
+
+        double substitution_len = get_tex_substitution_len (substitution_list, node);
+
+        if (!isnan (substitution_len)) {
+
+            *len_ptr += len_coefficient * substitution_len;
+            return SUCCESS;
+        }
+    }
+
+
+
     switch (node->atom_type) {
 
-        case DAT_CONST:     return const_get_tex_len     (node->element.value.val_double);
-        case DAT_VARIABLE:  return variable_get_tex_len  (node->element.value.var_str);
-        case DAT_OPERATION: return operation_get_tex_len (node);
+        case DAT_CONST:     double_get_tex_len    (node->element.value.val_double, len_ptr, len_coefficient);                    return SUCCESS;
+        case DAT_VARIABLE:  variable_get_tex_len  (node->element.value.var_str,    len_ptr, len_coefficient);                    return SUCCESS;
+        case DAT_OPERATION: operation_get_tex_len (node,                           len_ptr, len_coefficient, substitution_list); return SUCCESS;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 }
 
 
-Return_code  const_get_tex_len  (double value, double* len_ptr, double len_coefficient) {
+Return_code  double_get_tex_len  (double value, double* len_ptr, double len_coefficient) {
 
     if (!len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1976,7 +2034,10 @@ Return_code  const_get_tex_len  (double value, double* len_ptr, double len_coeff
     if (value < 0) { *len_ptr += len_coefficient * 1; value *= -1; } //for -
 
 
-    *len_ptr += len_coefficient * ceil (log10 ( ceil (value))); //for all the digits
+    if (value < 2) value += 2; //for correct log (value) work
+
+
+    *len_ptr += len_coefficient * ceil (log10 (value)); //for all the digits
 
 
     *len_ptr += len_coefficient * 2; //for .0 at the end
@@ -1986,19 +2047,28 @@ Return_code  const_get_tex_len  (double value, double* len_ptr, double len_coeff
 }
 
 
+size_t  size_t_get_tex_len  (size_t value) {
+
+    if (value < 2) value = 2;
+
+
+    return (size_t) ceil (log10 (ceil (value)));
+}
+
+
 Return_code  variable_get_tex_len  (const char* variable, double* len_ptr, double len_coefficient) {
 
     if (!variable || !len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    *len_ptr += len_coefficient * strlen (variable);
+    *len_ptr += len_coefficient * (double) strlen (variable);
 
 
     return SUCCESS;
 }
 
 
-Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coefficient) {
+Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitutions) {
 
     if (!node || (node->atom_type != DAT_OPERATION) || isnan (*len_ptr) || isnan (len_coefficient)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2007,33 +2077,33 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
 
         case DOC_ADD:
 
-            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions));
             *len_ptr += len_coefficient * 1; //for +
-            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
             return SUCCESS;
 
         case DOC_SUB:
 
-            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions));
             *len_ptr += len_coefficient * 1; //for -
-            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
             return SUCCESS;
 
         case DOC_MULT:
 
-            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions));
             *len_ptr += len_coefficient * 1; //for \cdot
-            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient));
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
             return SUCCESS;
 
         case DOC_DIV: {
 
             double son_len_coefficient = 1 / 2;
-            size_t len_left            = 0;
-            size_t len_right           = 0;
+            double len_left            = 0;
+            double len_right           = 0;
 
-            try (node_get_tex_len (node-> left_son, &len_left,  son_len_coefficient));
-            try (node_get_tex_len (node->right_son, &len_right, son_len_coefficient));
+            try (node_get_tex_len (node-> left_son, &len_left,  son_len_coefficient, substitutions));
+            try (node_get_tex_len (node->right_son, &len_right, son_len_coefficient, substitutions));
 
             *len_ptr += len_coefficient * fmax (len_left, len_right);
 
@@ -2050,4 +2120,416 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
     }
 }
 
+
+Return_code  tree_substitute  (Tree* tree, Tree_substitution* tree_substitution) {
+
+    if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    node_substitute (tree->root, tree_substitution, 1);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tree_substitution_ctor  (Tree_substitution* tree_substitution) {
+
+    if (!tree_substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    tree_substitution->substitution_list = (Node_substitution*) calloc (MAX_SUBSTITUTIONS * NODE_SUBSTITUTION_SIZE, 1);
+    tree_substitution->num_substitutions = 0;
+
+    for (size_t i = 0; i < MAX_SUBSTITUTIONS; i++) {
+
+        tree_substitution->substitution_list [i] = {nullptr, i};
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tree_substitution_dtor  (Tree_substitution* tree_substitution)  {
+
+    if (!tree_substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    free (tree_substitution->substitution_list);
+
+
+    return SUCCESS;
+}
+
+
+double  get_operation_tex_len  (Operation_code operation_code, double len_coefficient) {
+
+    switch (operation_code) {
+
+        case DOC_ADD:  return len_coefficient * 1;
+        case DOC_SUB:  return len_coefficient * 1;
+        case DOC_MULT: return len_coefficient * 1;
+        case DOC_DIV:  return 0;
+
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return NAN;
+        default:          LOG_ERROR (BAD_ARGS); return NAN;
+    }
+}
+
+
+Return_code  node_substitute  (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient) {
+
+    if (!node || !tree_substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (node->atom_type != DAT_OPERATION) return SUCCESS; //can't substitute if node has no sons!
+
+
+    node_substitute_left  (node, tree_substitution, cur_len_coefficient);
+    node_substitute_right (node, tree_substitution, cur_len_coefficient);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  node_substitute_left  (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient) {
+
+    if (!node || !tree_substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if ( (node->atom_type != DAT_OPERATION) || !node->left_son) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    double len_left = 0;
+    node_get_tex_len (node->left_son, &len_left, cur_len_coefficient, tree_substitution);
+
+
+    if (len_left < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
+
+
+    node_substitute (node->left_son, tree_substitution, cur_len_coefficient);
+
+
+    len_left = 0;
+    node_get_tex_len (node->left_son, &len_left, cur_len_coefficient, tree_substitution);
+    if (len_left < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
+
+
+    tree_add_substitution (tree_substitution, node->left_son);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  node_substitute_right  (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient) {
+
+    if (!node || !tree_substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if ( (node->atom_type != DAT_OPERATION) || !node->right_son) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    double len_right = 0;
+    node_get_tex_len (node->right_son, &len_right, cur_len_coefficient, tree_substitution);
+
+
+    if (len_right < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
+
+
+    node_substitute (node->right_son, tree_substitution, cur_len_coefficient);
+
+
+    len_right = 0;
+    node_get_tex_len (node->left_son, &len_right, cur_len_coefficient, tree_substitution);
+    if (len_right < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
+
+
+    tree_add_substitution (tree_substitution, node->right_son);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tree_add_substitution  (Tree_substitution* tree_substitution, Node* node) {
+
+    if (!tree_substitution || !node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    tree_substitution->substitution_list [tree_substitution->num_substitutions] = { node, tree_substitution->num_substitutions };
+
+
+    tree_substitution->num_substitutions += 1;
+
+
+    return SUCCESS;
+}
+
+
+double  get_tex_substitution_len  (Tree_substitution* substitution_list, Node* node) {
+
+    if (!substitution_list || !node) { LOG_ERROR (BAD_ARGS); return NAN; }
+
+
+    for (size_t i = 0; i < substitution_list->num_substitutions; i++) {
+
+        if ( nodes_the_same (substitution_list->substitution_list [i].node, node) ) {
+
+            double ans = 0;
+            ans += get_substitution_letter_len (substitution_list->substitution_list [i].substitution_number);
+            return ans;
+        }
+    }
+
+
+    return NAN; //not in the list
+}
+
+
+double  get_substitution_letter_len  (size_t substitution_number) {
+
+    double ans   = 0;
+    size_t index = (size_t) floor ( (double) substitution_number / ALPHABET_LEN );
+
+
+    ans += 1; //for letter
+
+    ans += (double) size_t_get_tex_len (index); //for index
+
+
+    return ans;
+}
+
+
+Node_substitution*  get_tex_substitution  (Tree_substitution* substitutions, Node* node) {
+
+    if (!substitutions || !node) { LOG_ERROR (BAD_ARGS); return nullptr; }
+
+
+    for (size_t i = 0; i < substitutions->num_substitutions; i++) {
+
+        if ( nodes_the_same (substitutions->substitution_list [i].node, node) ) {
+
+            return &substitutions->substitution_list [i];
+        }
+    }
+
+
+    return nullptr;
+}
+
+
+Return_code  tex_write_substitution  (FILE* file, Node_substitution* substitution) {
+
+    if (!file || !substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    tex_write_substitution_letter (file, substitution);
+    tex_write_substitution_index  (file, substitution);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_write_substitution_letter  (FILE* file, Node_substitution* substitution) {
+
+    if (!file || !substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    const char* letter = nullptr;
+
+    switch (substitution->substitution_number % ALPHABET_LEN) {
+
+        case 0:  letter = "\\alpha";      break;
+        case 1:  letter = "\\beta";       break;
+        case 2:  letter = "\\gamma";      break;
+        case 3:  letter = "\\delta";      break;
+        case 4:  letter = "\\varepsilon"; break;
+        case 5:  letter = "\\zeta";       break;
+        case 6:  letter = "\\eta";        break;
+        case 7:  letter = "\\theta";      break;
+        case 8:  letter = "\\iota";       break;
+        case 9:  letter = "\\kappa";      break;
+        case 10: letter = "\\lambda";     break;
+        case 11: letter = "\\mu";         break;
+        case 12: letter = "\\nu";         break;
+        case 13: letter = "\\xi";         break;
+        case 14: letter = "o";    break;
+        case 15: letter = "\\pi";         break;
+        case 16: letter = "\\rho";        break;
+        case 17: letter = "\\sigma";      break;
+        case 18: letter = "\\tau";        break;
+        case 19: letter = "\\upsilon";    break;
+        case 20: letter = "\\phi";        break;
+        case 21: letter = "\\chi";        break;
+        case 22: letter = "\\psi";        break;
+        case 23: letter = "\\omega";      break;
+
+        default: LOG_MESSAGE ("something's wrong! i can feel it..."); return BAD_ARGS;
+    }
+
+
+    fprintf (file, "%s_", letter);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_write_substitution_index  (FILE* file, Node_substitution* substitution) {
+
+    if (!file || !substitution) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    size_t index = substitution->substitution_number / ALPHABET_LEN;
+
+
+    fprintf (file, "{%zd}", index);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* substitutions) {
+
+    if (!file || !substitutions) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (!substitutions->num_substitutions) return SUCCESS; //нечего объяснять!
+
+
+    fprintf (file, "$$");
+    fprintf (file, "где\n");
+
+
+    for (size_t i = 0; i < substitutions->num_substitutions; i++) {
+
+        tex_write_substitution_decoding (file, substitutions, i);
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* substitutions, size_t index) {
+
+    if (!file || !substitutions || !substitutions->substitution_list [index].node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    fprintf (file, "$$");
+    tex_write_substitution (file, &substitutions->substitution_list [index]);
+    fprintf (file, " = ");
+
+
+    Node_substitution this_substitution = substitutions->substitution_list [index]; //чтобы функция печатания не увидила тривиальной замены на эту же букву
+    substitutions->substitution_list [index] = { nullptr, 0 };
+
+    tex_write_node (file, this_substitution.node, substitutions);
+
+    substitutions->substitution_list [index] = this_substitution;
+
+
+
+
+    if (index != substitutions->num_substitutions - 1) { //в конце не закрываем! не наша задача
+
+        fprintf (file, "$$\n");
+    }
+
+
+
+    return SUCCESS;
+}
+
+
+bool  trees_the_same  (Tree* tree1, Tree* tree2) {
+
+    if (!tree1 || !tree2) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+    return nodes_the_same (tree1->root, tree2->root);
+}
+
+
+bool  nodes_the_same  (Node* node1, Node* node2) {
+
+    if (!node1 || !node2) { return false; }
+
+
+
+    if (node1->atom_type != node2->atom_type) return false;
+    if (node1 == node2)                       return true;
+
+
+
+    switch (node1->atom_type) {
+
+        case DAT_CONST:
+
+            if ( double_equal (node1->element.value.val_double, node2->element.value.val_double) ) return true;
+            return false;
+
+        case DAT_VARIABLE:
+
+            if ( !strcmp (node1->element.value.var_str, node2->element.value.var_str) ) return true;
+            return false;
+
+        case DAT_OPERATION: return operation_nodes_the_same (node1, node2);
+
+
+        default: LOG_ERROR (BAD_ARGS); return false;
+    }
+}
+
+
+bool  operation_nodes_the_same  (Node* node1, Node* node2) {
+
+    if (!node1 || !node2 || (node1->atom_type != DAT_OPERATION) || (node2->atom_type != DAT_OPERATION) ) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+    if (node1->element.value.val_operation_code != node2->element.value.val_operation_code) return false;
+
+
+
+    switch (node1->element.value.val_operation_code) {
+
+        case DOC_ADD:  return sons_the_same (node1, node2, true);
+        case DOC_SUB:  return sons_the_same (node1, node2, false);
+        case DOC_MULT: return sons_the_same (node1, node2, true);
+        case DOC_DIV:  return sons_the_same (node1, node2, false);
+
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return false;
+        default:          LOG_ERROR (BAD_ARGS); return false;
+    }
+}
+
+
+bool  sons_the_same  (Node* node1, Node* node2, bool is_symmetric_operation) {
+
+    if (!node1           || !node2)            { LOG_ERROR (BAD_ARGS); return false; }
+    if (!node1->left_son || !node1->right_son) { LOG_ERROR (BAD_ARGS); return false; }
+    if (!node2->left_son || !node2->right_son) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+
+    bool ans = false;
+
+
+    ans |= nodes_the_same (node1->left_son, node2-> left_son) & nodes_the_same (node1->right_son, node2->right_son);
+
+
+    if (is_symmetric_operation) {
+
+        ans |= nodes_the_same (node1->left_son, node2->right_son) & nodes_the_same (node1->right_son, node2-> left_son);
+    }
+
+
+    return ans;
+}
 
