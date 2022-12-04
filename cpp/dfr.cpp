@@ -1810,11 +1810,9 @@ Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_n
     if (!file || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "\\begin {flushleft}\n");
-    fprintf (file, "давайте найдем $");
+    fprintf (file, "\\subsection {давайте найдем $");
     tex_write_function_name (file, derivative_num);
-    fprintf (file, "(%.1lf)$\n", value);
-    fprintf (file, "\\end {flushleft}\n\n");
+    fprintf (file, "(%.1lf)$}\n", value);
 
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "%s\n", tex_get_phrase ());
@@ -1903,11 +1901,9 @@ Return_code  tex_write_derivative_introduction  (FILE* file, const char* variabl
     if (!file || !variable) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "\\begin {flushleft}\n");
-    fprintf (file, "давайте найдем ");
+    fprintf (file, "\\subsection {давайте найдем $");
     tex_write_function_name (file, derivative_num);
-    fprintf (file, "(%s)\n", variable);
-    fprintf (file, "\\end {flushleft}\n\n");
+    fprintf (file, "(%s)$}\n", variable);
 
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "%s\n", tex_get_phrase ());
@@ -2098,7 +2094,7 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
 
         case DOC_DIV: {
 
-            double son_len_coefficient = 1 / 2;
+            double son_len_coefficient = 1;
             double len_left            = 0;
             double len_right           = 0;
 
