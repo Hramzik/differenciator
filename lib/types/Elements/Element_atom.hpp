@@ -32,13 +32,16 @@
 enum Operation_code {
 
     DOC_UNKNOWN = 0, //DOC - short for differenciator_operation_code 
-    DOC_ADD  = 1,
-    DOC_SUB  = 2,
-    DOC_DIV  = 3,
-    DOC_MULT = 4,
-    /*DOC_POW  = 5,
-    DOC_SIN  = 6,
-    DOC_COS  = 7,*/
+    DOC_ADD,
+    DOC_SUB,
+    DOC_DIV,
+    DOC_MULT,
+    DOC_POW,
+    DOC_LN,
+    DOC_SIN,
+    DOC_COS,
+    DOC_TG,
+    DOC_CTG,
 };
 
 union Atom {

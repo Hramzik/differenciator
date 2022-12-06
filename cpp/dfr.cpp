@@ -206,9 +206,12 @@ size_t  get_operation_priority  (Operation_code operation_code) {
         case DOC_SUB:  return 3;
         case DOC_DIV:  return 4;
         case DOC_MULT: return 4;
-        /*case DOC_POW:  return 1;
-        case DOC_SIN:  return 2;
-        case DOC_COS:  return 2;*/
+        case DOC_POW:  return 5;
+        case DOC_LN:   return 6;
+        case DOC_SIN:  return 6;
+        case DOC_COS:  return 6;
+        case DOC_TG:   return 6;
+        case DOC_CTG:  return 6;
 
         default: LOG_ERROR (BAD_ARGS); return 0;
     }
@@ -276,6 +279,16 @@ Return_code  read_variable  (Buffer_node** buffer_node_ptr, Buffer_node* max_buf
 }
 
 
+//--------------------------------------------------
+#define CHECK_CLOSING_BRACKET\
+    if ( (*buffer_node_ptr)->atom_type != DAT_OPERATION || (*buffer_node_ptr)->val_buffer_operation_code != DBOC_CLOSING_BRACKET) {\
+\
+        LOG_ERROR (BAD_ARGS);\
+        return BAD_ARGS;\
+    }
+//--------------------------------------------------
+
+
 Return_code  read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
     if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
@@ -286,6 +299,8 @@ Return_code  read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
         *buffer_node_ptr += 1;
 
         try (read_sum (buffer_node_ptr, max_buffer_node, node_ptr));
+
+        CHECK_CLOSING_BRACKET
 
         *buffer_node_ptr += 1;
     }
@@ -298,12 +313,113 @@ Return_code  read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
 }
 
 
+//--------------------------------------------------
+#undef CHECK_CLOSING_BRACKET
+//--------------------------------------------------
+
+
+//--------------------------------------------------
+#define CURRENT (*buffer_node_ptr)
+#define CUR_OP CURRENT->val_buffer_operation_code
+//--------------------------------------------------
+
+
+Return_code  read_unary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
+
+    if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    Node* new_node = nullptr;
+
+    if ( CURRENT->atom_type == DAT_OPERATION && (CUR_OP == DBOC_SIN ||
+                                                 CUR_OP == DBOC_COS ||
+                                                 CUR_OP == DBOC_TG  ||
+                                                 CUR_OP == DBOC_CTG ||
+                                                 CUR_OP == DBOC_SUB ||
+                                                 CUR_OP == DBOC_LN)) {
+
+        switch (CUR_OP) {
+
+            case DBOC_SIN: new_node = create_node (DAT_OPERATION, DOC_SIN); break;
+            case DBOC_COS: new_node = create_node (DAT_OPERATION, DOC_COS); break;
+            case DBOC_TG:  new_node = create_node (DAT_OPERATION, DOC_TG);  break;
+            case DBOC_CTG: new_node = create_node (DAT_OPERATION, DOC_CTG); break;
+            case DBOC_SUB: new_node = create_node (DAT_OPERATION, DOC_SUB); break;
+            case DBOC_LN:  new_node = create_node (DAT_OPERATION, DOC_LN);  break;
+
+            case DBOC_OPEN_BRACKET:    LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            case DBOC_CLOSING_BRACKET: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            case DBOC_ADD:             LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            case DBOC_MULT:            LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            case DBOC_DIV:             LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            case DBOC_POW:             LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            default:                   LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        }
+
+
+        new_node->left_son = create_node (DAT_CONST, (double) 0);
+
+
+        *node_ptr = new_node;
+
+
+        CURRENT += 1;
+
+
+        try (read_primary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son ));
+
+
+        return SUCCESS;
+    }
+
+
+    try (read_primary (buffer_node_ptr, max_buffer_node, node_ptr));
+
+
+    return SUCCESS;
+}
+
+
+//--------------------------------------------------
+#undef CURRENT
+#undef CUR_OP
+//--------------------------------------------------
+
+
+Return_code  read_power  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
+
+    if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    try (read_unary (buffer_node_ptr, max_buffer_node, node_ptr));
+
+
+    Node* new_node = nullptr;
+
+    while ( (*buffer_node_ptr)->atom_type == DAT_OPERATION && ( (*buffer_node_ptr)->val_buffer_operation_code == DBOC_POW) ) {
+
+        new_node = create_node (DAT_OPERATION, DOC_POW);
+        new_node->left_son = *node_ptr;
+
+
+        *buffer_node_ptr += 1;
+
+        *node_ptr = new_node;
+
+        try (read_unary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son));
+    }
+
+
+    return SUCCESS;
+}
+
+
 Return_code  read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
     if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    try (read_primary (buffer_node_ptr, max_buffer_node, node_ptr));
+    try (read_power (buffer_node_ptr, max_buffer_node, node_ptr));
 
 
     Node* new_node = nullptr;
@@ -328,7 +444,7 @@ Return_code  read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
 
         *node_ptr = new_node;
 
-        try (read_primary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son));
+        try (read_power (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son));
     }
 
 
@@ -407,7 +523,10 @@ Return_code  dfr_read_user_function  (Dfr* dfr, const char* file_name) {
     fclose (file);
 
 
-    _dfr_buffer_read  ( dfr->buffer, buffer);
+    _dfr_buffer_read (dfr->buffer, buffer);
+
+
+    //dfr_buffer_dump (dfr->buffer);
 
 
     dfr_user_function_tree_ctor (dfr);
@@ -615,7 +734,7 @@ Return_code  write_function_dive_left  (FILE* file, Tree* tree, Tree_iterator* t
     tree_iterator->depth = 0;
 
 
-    while (tree_iterator->current->left_son) {
+    while (tree_iterator->current->left_son && !is_unary (tree_iterator->current)) {
 
         write_function_check_open_bracket (file, tree_iterator, "L");
 
@@ -644,7 +763,7 @@ Return_code  write_function_inc  (FILE* file, Tree* tree, Tree_iterator* tree_it
         stack_push (tree_iterator->node_stack, tree_iterator->current);
         tree_iterator->depth += 1;
 
-        while (tree_iterator->current->left_son) {
+        while (tree_iterator->current->left_son && !is_unary (tree_iterator->current) ) {
 
             write_function_check_open_bracket (file, tree_iterator, "L");
 
@@ -723,6 +842,10 @@ Return_code  write_function_check_open_bracket  (FILE* file, Tree_iterator* tree
     if (!tree_iterator || !file || !next_node_str || (stricmp (next_node_str, "L") && stricmp (next_node_str, "R")) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
+    if ( is_unary (tree_iterator->current)) { fprintf (file, "("); return SUCCESS; }
+
+
+
     Node* son = nullptr;
 
     if (!stricmp (next_node_str, "L")) { son = tree_iterator->current->left_son;  }
@@ -749,6 +872,10 @@ Return_code  write_function_check_closing_bracket  (FILE* file, Tree_iterator* t
     Node* parent = (Node*) stack_pop  (tree_iterator->node_stack).value;
                            stack_push (tree_iterator->node_stack, parent);
                            stack_push (tree_iterator->node_stack, son);
+
+
+    if ( is_unary (parent)) { fprintf (file, ")"); return SUCCESS; }
+
 
 
     if (son->atom_type == DAT_OPERATION && parent->atom_type == DAT_OPERATION &&
@@ -822,6 +949,19 @@ Node*  node_calculate_derivative  (Node* node, const char* variable) {
 }
 
 
+//--------------------------------------------------
+#define ROOT root_node
+
+#define LEFT  root_node-> left_son
+#define RIGHT root_node->right_son
+
+#define LEFTLEFT   root_node-> left_son-> left_son
+#define LEFTRIGHT  root_node-> left_son->right_son
+#define RIGHTLEFT  root_node->right_son-> left_son
+#define RIGHTRIGHT root_node->right_son->right_son
+//--------------------------------------------------
+
+
 Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
     if (!node || !variable || (node->atom_type != DAT_OPERATION)) { LOG_ERROR (BAD_ARGS); return nullptr; }
@@ -837,55 +977,170 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
         case DOC_ADD:
 
-            root_node = create_node (DAT_OPERATION, DOC_ADD);
+            ROOT = create_node (DAT_OPERATION, DOC_ADD);
 
-            root_node->left_son  = node_calculate_derivative (node->left_son,  variable);
-            root_node->right_son = node_calculate_derivative (node->right_son, variable);
+            LEFT  = node_calculate_derivative (node->left_son,  variable);
+            RIGHT = node_calculate_derivative (node->right_son, variable);
 
             break;
 
         case DOC_SUB:
 
-            root_node = create_node (DAT_OPERATION, DOC_SUB);
+            ROOT = create_node (DAT_OPERATION, DOC_SUB);
 
-            root_node->left_son  = node_calculate_derivative (node->left_son,  variable);
-            root_node->right_son = node_calculate_derivative (node->right_son, variable);
+            LEFT  = node_calculate_derivative (node->left_son,  variable);
+            RIGHT = node_calculate_derivative (node->right_son, variable);
 
             break;
 
         case DOC_MULT:
 
-            root_node = create_node (DAT_OPERATION, DOC_ADD);
+            ROOT = create_node (DAT_OPERATION, DOC_ADD);
 
-            root_node->left_son  = create_node (DAT_OPERATION, DOC_MULT);
-            root_node->right_son = create_node (DAT_OPERATION, DOC_MULT);
+            LEFT  = create_node (DAT_OPERATION, DOC_MULT);
+            RIGHT = create_node (DAT_OPERATION, DOC_MULT);
 
-            root_node->left_son->left_son   = node_calculate_derivative (node->left_son,  variable);
-            root_node->left_son->right_son  = copy_node (node->right_son);
-            root_node->right_son->left_son  = copy_node (node-> left_son);
-            root_node->right_son->right_son = node_calculate_derivative (node->right_son, variable);
+            LEFTLEFT   = node_calculate_derivative (node->left_son,  variable);
+            LEFTRIGHT  = copy_node (node->right_son);
+            RIGHTLEFT  = copy_node (node-> left_son);
+            RIGHTRIGHT = node_calculate_derivative (node->right_son, variable);
 
             break;
 
         case DOC_DIV:
 
-            root_node = create_node (DAT_OPERATION, DOC_DIV);
+            ROOT = create_node (DAT_OPERATION, DOC_DIV);
 
-            root_node->left_son  = create_node (DAT_OPERATION, DOC_SUB);
-            root_node->right_son = create_node (DAT_OPERATION, DOC_MULT);
+            LEFT  = create_node (DAT_OPERATION, DOC_SUB);
+            RIGHT = create_node (DAT_OPERATION, DOC_MULT);
 
-            root_node->left_son->left_son   = create_node (DAT_OPERATION, DOC_MULT);
-            root_node->left_son->left_son->left_son  = node_calculate_derivative (node->left_son, variable);
-            root_node->left_son->left_son->right_son = copy_node (node->right_son);
-            root_node->left_son->right_son = create_node (DAT_OPERATION, DOC_MULT);
-            root_node->left_son->right_son->left_son  = copy_node (node->left_son);
-            root_node->left_son->right_son->right_son = node_calculate_derivative (node->right_son, variable);
+            LEFTLEFT   = create_node (DAT_OPERATION, DOC_MULT); //numerator
+            LEFTLEFT->left_son  = node_calculate_derivative (node->left_son, variable);
+            LEFTLEFT->right_son = copy_node (node->right_son);
+            LEFTRIGHT = create_node (DAT_OPERATION, DOC_MULT);
+            LEFTRIGHT->left_son  = copy_node (node->left_son);
+            LEFTRIGHT->right_son = node_calculate_derivative (node->right_son, variable);
 
-            root_node->right_son->left_son  = copy_node (node->right_son);
-            root_node->right_son->right_son = copy_node (node->right_son);
+            RIGHTLEFT  = copy_node (node->right_son);
+            RIGHTRIGHT = copy_node (node->right_son);
 
             break;
 
+        case DOC_POW:
+
+            if (node->left_son->atom_type == DAT_CONST && node->right_son->atom_type == DAT_CONST) return create_node (DAT_CONST, (double) 0);
+
+            else if (node->right_son->atom_type == DAT_CONST) {
+
+                ROOT = create_node (DAT_OPERATION, DOC_MULT);
+
+                LEFT = create_node (DAT_OPERATION, DOC_MULT);
+                LEFTLEFT  = node_calculate_derivative (node->left_son, variable);
+                LEFTRIGHT = copy_node (node->right_son);
+
+                RIGHT = create_node (DAT_OPERATION, DOC_POW);
+                RIGHTLEFT             = copy_node (node->left_son);
+                RIGHTRIGHT            = create_node (DAT_OPERATION, DOC_SUB);
+                RIGHTRIGHT-> left_son = copy_node (node->right_son);
+                RIGHTRIGHT->right_son = create_node (DAT_CONST, (double) 1);
+            }
+
+            else if (node->left_son->atom_type == DAT_CONST) {
+
+                ROOT = create_node (DAT_OPERATION, DOC_MULT);
+
+                LEFT = create_node (DAT_OPERATION, DOC_MULT); //ln(a) * x'
+                LEFTLEFT  = node_calculate_derivative (node->right_son, variable);
+                LEFTRIGHT = create_node (DAT_OPERATION, DOC_LN);
+                LEFTRIGHT-> left_son = create_node (DAT_CONST, (double) 0);
+                LEFTRIGHT->right_son = copy_node (node->left_son);
+
+                RIGHT = copy_node (node); //a**x
+            }
+
+            else {
+
+                Node* temp = create_node (DAT_OPERATION, DOC_MULT); //g * ln(f)
+                temp->left_son =  copy_node (node->right_son);
+                temp->right_son = create_node (DAT_OPERATION, DOC_LN);
+                temp->right_son->left_son  = create_node (DAT_CONST, (double) 0);
+                temp->right_son->right_son = copy_node (node->left_son);
+
+                ROOT  = create_node (DAT_OPERATION, DOC_MULT);
+                LEFT  = copy_node (node);
+                RIGHT = node_calculate_derivative (temp, variable);
+
+                _node_dtor (temp);
+            }
+
+            break;
+
+        case DOC_LN:
+
+            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+
+            LEFT  = node_calculate_derivative (node->right_son, variable);
+            RIGHT = copy_node (node->right_son);
+
+            break;
+
+        case DOC_SIN:
+
+            ROOT = create_node (DAT_OPERATION, DOC_MULT);
+
+            LEFT       = node_calculate_derivative (node->right_son, variable);
+            RIGHT      = create_node (DAT_OPERATION, DOC_COS);
+            RIGHTLEFT  = create_node (DAT_CONST, (double) 0);
+            RIGHTRIGHT = copy_node (node->right_son);
+
+            break;
+
+        case DOC_COS:
+
+            ROOT = create_node (DAT_OPERATION, DOC_MULT);
+
+            LEFT       = create_node (DAT_OPERATION, DOC_MULT);
+            LEFTLEFT   = create_node (DAT_CONST, (double) -1);
+            LEFTRIGHT  = node_calculate_derivative (node->right_son, variable);
+            RIGHT      = create_node (DAT_OPERATION, DOC_SIN);
+            RIGHTLEFT  = create_node (DAT_CONST, (double) 0);
+            RIGHTRIGHT = copy_node (node->right_son);
+
+            break;
+
+        case DOC_TG:
+
+            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+
+            LEFT       = node_calculate_derivative (node->right_son, variable);
+
+            RIGHT      = create_node (DAT_OPERATION, DOC_MULT);
+            RIGHTLEFT  = create_node (DAT_OPERATION, DOC_COS);
+            RIGHTRIGHT = create_node (DAT_OPERATION, DOC_COS);
+            RIGHTLEFT-> left_son  = create_node (DAT_CONST, (double) 0);
+            RIGHTRIGHT->left_son  = create_node (DAT_CONST, (double) 0);
+            RIGHTLEFT-> right_son = copy_node (node->right_son);
+            RIGHTRIGHT->right_son = copy_node (node->right_son);
+
+            break;
+
+        case DOC_CTG:
+
+            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+
+            LEFT       = create_node (DAT_OPERATION, DOC_MULT);
+            LEFTLEFT   = create_node (DAT_CONST, (double) -1);
+            LEFTRIGHT  = node_calculate_derivative (node->right_son, variable);
+
+            RIGHT      = create_node (DAT_OPERATION, DOC_MULT);
+            RIGHTLEFT  = create_node (DAT_OPERATION, DOC_SIN);
+            RIGHTRIGHT = create_node (DAT_OPERATION, DOC_SIN);
+            RIGHTLEFT-> left_son  = create_node (DAT_CONST, (double) 0);
+            RIGHTRIGHT->left_son  = create_node (DAT_CONST, (double) 0);
+            RIGHTLEFT-> right_son = copy_node (node->right_son);
+            RIGHTRIGHT->right_son = copy_node (node->right_son);
+
+            break;
 
         default:
 
@@ -894,6 +1149,17 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
     return root_node;
 }
+
+
+//--------------------------------------------------
+#undef ROOT
+#undef LEFT
+#undef RIGHT
+#undef LEFTLEFT
+#undef LEFTRIGHT
+#undef RIGHTLEFT
+#undef RIGHTRIGHT
+//--------------------------------------------------
 
 
 Node*  variable_calculate_derivative  (Node* node, const char* variable) {
@@ -989,12 +1255,30 @@ Return_code  operation_fold_constants  (Node* node, bool* folded_anything) {
             MY_VAL = LEFT_VAL / RIGHT_VAL; I_FOLDED;
             break;
 
+        case DOC_POW:
+
+            if (double_equal (LEFT_VAL, 0) && RIGHT_VAL < 0)                                   return BAD_ARGS;
+            if (LEFT_VAL < 0 && !double_equal ( (RIGHT_VAL - (double) (size_t) RIGHT_VAL), 0)) return BAD_ARGS; //целая ли степень
+
+            MY_VAL = pow (LEFT_VAL, RIGHT_VAL);
+
+            break;
+
+        case DOC_LN:  return SUCCESS;
+        case DOC_SIN: return SUCCESS;
+        case DOC_COS: return SUCCESS;
+        case DOC_TG:  return SUCCESS;
+        case DOC_CTG: return SUCCESS;
+
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
 
     node->atom_type = DAT_CONST;
+
+
+    I_FOLDED;
 
 
     node_dtor (node-> left_son);
@@ -1096,16 +1380,19 @@ Return_code  node_fold_neutral  (Node* node, bool* folded_anything) {
     *folded_anything = true;\
     return SUCCESS;
 
-#define NODE_TO_0\
+#define NODE_TO(x)\
     _node_dtor (LEFT);\
     _node_dtor (RIGHT);\
 \
     node->atom_type = DAT_CONST;\
-    node->CONST     = 0;\
+    node->CONST     = x;\
     node-> left_son = nullptr;\
     node->right_son = nullptr;\
     *folded_anything = true;\
     return SUCCESS;
+
+#define  LEFT_IS(x) (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, x) )
+#define RIGHT_IS(x) (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, x) )
 //--------------------------------------------------
 
 
@@ -1116,47 +1403,84 @@ Return_code  operation_fold_neutral  (Node* node, bool* folded_anything) {
 
     switch (node->OPERATION_CODE) {
 
-        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
-
         case DOC_ADD:
 
-            if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, 0) ) { PROMOTE_RIGHT }
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { PROMOTE_LEFT }
+            if ( LEFT_IS (0) ) { PROMOTE_RIGHT }
+            if (RIGHT_IS (0) ) { PROMOTE_LEFT }
 
-            break;
+            return SUCCESS;
 
         case DOC_SUB:
 
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { PROMOTE_LEFT }
+            if (RIGHT_IS (0) ) { PROMOTE_LEFT }
 
-            break;
+            return SUCCESS;
 
         case DOC_MULT:
 
-            if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, 1) ) { PROMOTE_RIGHT }
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 1) ) { PROMOTE_LEFT }
+            if ( LEFT_IS (1) ) { PROMOTE_RIGHT }
+            if (RIGHT_IS (1) ) { PROMOTE_LEFT }
 
-            if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, 0) ) { NODE_TO_0 }
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { NODE_TO_0 }
+            if ( LEFT_IS (0) ) { NODE_TO (0) }
+            if (RIGHT_IS (0) ) { NODE_TO (0) }
 
-            break;
+            return SUCCESS;
 
         case DOC_DIV:
 
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 1) ) { PROMOTE_LEFT }
+            if (RIGHT_IS (1) ) { PROMOTE_LEFT }
 
-            if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, 0) ) { NODE_TO_0 }
+            if (LEFT_IS  (0) ) { NODE_TO (0) }
 
-            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { return BAD_ARGS; }
+            if (RIGHT_IS (0) ) { return BAD_ARGS; }
 
-            break;
+            return SUCCESS;
+
+        case DOC_POW:
+
+            if ( LEFT_IS (0) ) { NODE_TO (0) }
+            if ( LEFT_IS (1) ) { NODE_TO (1) }
+            if (RIGHT_IS (0) ) { NODE_TO (1) }
+            if (RIGHT_IS (1) ) { PROMOTE_LEFT }
+
+            return SUCCESS;
+
+        case DOC_LN:
+
+            if (RIGHT->atom_type == DAT_CONST && (RIGHT->CONST < 0 || double_equal (RIGHT->CONST, 0)) ) return BAD_ARGS;
+
+            if (RIGHT_IS (1)) { NODE_TO (0) }
+
+            return SUCCESS;
+
+        case DOC_SIN:
+
+            if (RIGHT_IS (0)) { NODE_TO (0) }
+
+            return SUCCESS;
+
+        case DOC_COS:
+
+            if (RIGHT_IS (0)) { NODE_TO (1) }
+
+            return SUCCESS;
+
+        case DOC_TG:
+
+            if (RIGHT_IS (0)) { NODE_TO (0) }
+
+            return SUCCESS;
+
+        case DOC_CTG:
+
+            if (RIGHT_IS (0)) return BAD_ARGS;
+
+            return SUCCESS;
 
 
-        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        default:          LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
-
-
-    return SUCCESS;
 }
 
 
@@ -1243,12 +1567,76 @@ Return_code  read_buffer_operation  (char** str_ptr, Buffer_node* buffer_node) {
     if (!str_ptr || !*str_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (**str_ptr == '(') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_OPEN_BRACKET };    return SUCCESS; }
-    if (**str_ptr == ')') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CLOSING_BRACKET }; return SUCCESS; }
-    if (**str_ptr == '+') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_ADD };             return SUCCESS; }
-    if (**str_ptr == '-') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SUB };             return SUCCESS; }
-    if (**str_ptr == '*') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_MULT };            return SUCCESS; }
-    if (**str_ptr == '/') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_DIV };             return SUCCESS; }
+    switch (**str_ptr) {
+
+        case '(': *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_OPEN_BRACKET };    return SUCCESS;
+        case ')': *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CLOSING_BRACKET }; return SUCCESS;
+        case '+': *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_ADD };             return SUCCESS;
+        case '-': *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SUB };             return SUCCESS;
+        case '/': *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_DIV };             return SUCCESS;
+        case '*':
+
+            *str_ptr += 1;
+            if (**str_ptr == '*') { *str_ptr += 1; *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_POW };  } //pow
+            else                  {                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_MULT }; } //mult
+
+            return SUCCESS;
+
+        case 's': //sin
+
+            if (*(*str_ptr + 1) == 'i' && *(*str_ptr + 2) == 'n' && !is_variable_mid (*(*str_ptr + 3)) ) {
+
+                *str_ptr += 3;
+                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_SIN };
+                return SUCCESS;
+            }
+
+            break;
+
+        case 'c': //cos ctg
+
+            if (*(*str_ptr + 1) == 'o' && *(*str_ptr + 2) == 's' && !is_variable_mid (*(*str_ptr + 3)) ) {
+
+                *str_ptr += 3;
+                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_COS };
+                return SUCCESS;
+            }
+
+            if (*(*str_ptr + 1) == 't' && *(*str_ptr + 2) == 'g' && !is_variable_mid (*(*str_ptr + 3)) ) {
+
+                *str_ptr += 3;
+                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_CTG };
+                return SUCCESS;
+            }
+
+            break;
+
+        case 't': //tg
+
+            if (*(*str_ptr + 1) == 'g' && !is_variable_mid (*(*str_ptr + 2)) ) {
+
+                *str_ptr += 2;
+                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_TG };
+                return SUCCESS;
+            }
+
+            break;
+
+        case 'l': //tg
+
+            if (*(*str_ptr + 1) == 'n' && !is_variable_mid (*(*str_ptr + 2)) ) {
+
+                *str_ptr += 2;
+                *buffer_node = { DAT_OPERATION, .val_buffer_operation_code = DBOC_LN };
+                return SUCCESS;
+            }
+
+            break;
+
+
+        default: break;
+    }
+
 
 
     return read_buffer_variable (str_ptr, buffer_node);
@@ -1563,6 +1951,7 @@ Return_code  tex_write_tree  (FILE* file, Tree* tree) {
     Tree_substitution substitutions = {};
     tree_substitution_ctor (&substitutions);
 
+
     tree_substitute (tree, &substitutions);
 
 
@@ -1610,8 +1999,6 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
 
 
 //--------------------------------------------------
-
-
 #define WRITE_LEFT\
         tex_write_check_open_bracket    (file, node->left_son, node);\
         tex_write_node                  (file, node->left_son, substitutions);\
@@ -1621,8 +2008,6 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
         tex_write_check_open_bracket    (file, node, node->right_son);\
         tex_write_node                  (file, node->right_son, substitutions);\
         tex_write_check_closing_bracket (file, node, node->right_son);
-
-
 //--------------------------------------------------
 
 
@@ -1663,6 +2048,43 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
             fprintf (file, " }");
             return SUCCESS;
 
+        case DOC_POW:
+
+            WRITE_LEFT;
+            fprintf (file, "^{");
+            tex_write_node (file, node->right_son, substitutions);
+            fprintf (file, " }");
+            return SUCCESS;
+
+        case DOC_LN:
+
+            fprintf (file, "\\ln ");
+            WRITE_RIGHT;
+            return SUCCESS;
+
+        case DOC_SIN:
+
+            fprintf (file, "\\sin ");
+            WRITE_RIGHT;
+            return SUCCESS;
+
+        case DOC_COS:
+
+            fprintf (file, "\\cos ");
+            WRITE_RIGHT;
+            return SUCCESS;
+
+        case DOC_TG:
+
+            fprintf (file, "\\tan ");
+            WRITE_RIGHT;
+            return SUCCESS;
+
+        case DOC_CTG:
+
+            fprintf (file, "\\cot ");
+            WRITE_RIGHT;
+            return SUCCESS;
 
         case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS; 
         default:          LOG_ERROR (BAD_ARGS); return BAD_ARGS;
@@ -1671,13 +2093,8 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
 
 
 //--------------------------------------------------
-
-
-
 #undef WRITE_LEFT
 #undef WRITE_RIGHT
-
-
 //--------------------------------------------------
 
 
@@ -2188,12 +2605,45 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
             return SUCCESS;
         }
 
-        case DOC_UNKNOWN:
+        case DOC_POW:
 
-            LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+            try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions));
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions)); //with coef
+            return SUCCESS;
+
+        case DOC_LN:
+
+            *len_ptr += len_coefficient * 2; //for ln
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
+            return SUCCESS;
+
+        case DOC_SIN:
+
+            *len_ptr += len_coefficient * 3; //for sin
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
+            return SUCCESS;
+
+        case DOC_COS:
+
+            *len_ptr += len_coefficient * 3; //for cos
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
+            return SUCCESS;
+
+        case DOC_TG:
+
+            *len_ptr += len_coefficient * 2; //for tg
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
+            return SUCCESS;
+
+        case DOC_CTG:
+
+            *len_ptr += len_coefficient * 3; //for ctg
+            try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions));
+            return SUCCESS;
 
 
-        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        default:          LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 }
 
@@ -2248,6 +2698,12 @@ double  get_operation_tex_len  (Operation_code operation_code, double len_coeffi
         case DOC_SUB:  return len_coefficient * 1;
         case DOC_MULT: return len_coefficient * 1;
         case DOC_DIV:  return 0;
+        case DOC_POW:  return 0;
+        case DOC_LN:   return len_coefficient * 2;
+        case DOC_SIN:  return len_coefficient * 3;
+        case DOC_COS:  return len_coefficient * 3;
+        case DOC_TG:   return len_coefficient * 2;
+        case DOC_CTG:  return len_coefficient * 3;
 
         case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return NAN;
         default:          LOG_ERROR (BAD_ARGS); return NAN;
@@ -2480,7 +2936,8 @@ Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* su
     if (!substitutions->num_substitutions) return SUCCESS; //нечего объяснять!
 
 
-    fprintf (file, "$$");
+    fprintf (file, "$$\n\n");
+    fprintf (file, "\\begin {flushright}");
     fprintf (file, "где\n");
 
 
@@ -2488,6 +2945,10 @@ Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* su
 
         tex_write_substitution_decoding (file, substitutions, i);
     }
+
+
+    fprintf (file, "\n");
+    fprintf (file, "\\end {flushright}\n$$");
 
 
     return SUCCESS;
@@ -2499,7 +2960,7 @@ Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* su
     if (!file || !substitutions || !substitutions->substitution_list [index].node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    fprintf (file, "$$");
+    fprintf (file, "$");
     tex_write_substitution (file, &substitutions->substitution_list [index]);
     fprintf (file, " = ");
 
@@ -2514,9 +2975,9 @@ Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* su
 
 
 
-    if (index != substitutions->num_substitutions - 1) { //в конце не закрываем! не наша задача
+    if (true) { //в конце не закрываем! не наша задача index != substitutions->num_substitutions - 1
 
-        fprintf (file, "$$\n");
+        fprintf (file, "$\\\\\n");
     }
 
 
@@ -2580,6 +3041,12 @@ bool  operation_nodes_the_same  (Node* node1, Node* node2) {
         case DOC_SUB:  return sons_the_same (node1, node2, false);
         case DOC_MULT: return sons_the_same (node1, node2, true);
         case DOC_DIV:  return sons_the_same (node1, node2, false);
+        case DOC_POW:  return sons_the_same (node1, node2, false);
+        case DOC_LN:   return sons_the_same (node1, node2, false);
+        case DOC_SIN:  return sons_the_same (node1, node2, false);
+        case DOC_COS:  return sons_the_same (node1, node2, false);
+        case DOC_TG:   return sons_the_same (node1, node2, false);
+        case DOC_CTG:  return sons_the_same (node1, node2, false);
 
         case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return false;
         default:          LOG_ERROR (BAD_ARGS); return false;
@@ -2741,5 +3208,76 @@ Return_code  _dfr_sorry_message  (const char* file, const char* func, int line) 
 
 
     return SUCCESS;
+}
+
+
+Return_code  dfr_buffer_dump  (Dfr_buffer* buffer) {
+
+    if (!buffer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    for (size_t i = 0; i < buffer->len; i++) {
+
+        printf ("%zd - ", i);
+
+
+        switch (buffer->buffer [i].atom_type) {
+
+            case DAT_CONST:     printf ("%lf", buffer->buffer [i].val_double);                break;
+            case DAT_VARIABLE:  printf ("%s", buffer->buffer [i].val_str);                   break;
+            case DAT_OPERATION: printf ("%d",  buffer->buffer [i].val_buffer_operation_code); break;
+
+            default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
+        }
+
+
+        printf ("\n");
+    }
+
+
+    return SUCCESS;
+}
+
+
+//--------------------------------------------------
+#define LEFT  node->left_son
+#define OP    element.value.val_operation_code
+#define CONST element.value.val_double
+//--------------------------------------------------
+
+
+bool  is_unary  (Node* node) {
+
+    if (!node) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+    if (node->atom_type != DAT_OPERATION) return false;
+
+    switch (node->OP) {
+
+        case DOC_ADD:  return false;
+        case DOC_MULT: return false;
+        case DOC_DIV:  return false;
+        case DOC_POW:  return false;
+
+        case DOC_SUB: break;
+        case DOC_LN:  break;
+        case DOC_SIN: break;
+        case DOC_COS: break;
+        case DOC_TG:  break;
+        case DOC_CTG: break;
+
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return false;
+        default: break;
+    }
+
+
+    if (!LEFT) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+    if (node->OP == DOC_SUB && (LEFT->atom_type != DAT_CONST || !double_equal (LEFT->CONST, 0))) return false;
+
+
+    return true;
 }
 

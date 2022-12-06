@@ -111,15 +111,23 @@ struct         Dfr_info_structure  {
     int          birth_line;
 };
 
+
 enum Buffer_operation_code {
 
-    DBOC_OPEN_BRACKET    = 0,
-    DBOC_CLOSING_BRACKET = 1,
-    DBOC_ADD  = 2,
-    DBOC_SUB  = 3,
-    DBOC_MULT = 4,
-    DBOC_DIV  = 5,
+    DBOC_OPEN_BRACKET,
+    DBOC_CLOSING_BRACKET,
+    DBOC_ADD,
+    DBOC_SUB,
+    DBOC_MULT,
+    DBOC_DIV,
+    DBOC_POW,
+    DBOC_LN,
+    DBOC_SIN,
+    DBOC_COS,
+    DBOC_TG,
+    DBOC_CTG,
 };
+
 
 typedef struct Buffer_node {
 
@@ -172,17 +180,17 @@ typedef struct Tree_substitution {
 
 } Tree_substitution; const size_t TREE_SUBSTITUTION_SIZE = sizeof (Tree_substitution);
 
+
+
 //--------------------------------------------------
-
-
 const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at least function and 1st derivative
 const size_t MAX_PREAMBLE_LEN   = ceil (log (MAX_TAYLOR_DEPTH) / log (10)) + strlen ("'th derivative:        ");
 const size_t MAX_PHRASE_LEN     = 100;
 const size_t MAX_SUBSTITUTIONS  = 100;
 const size_t MAX_TEX_LEN        = 50;
 const size_t ALPHABET_LEN       = 24;
-
 //--------------------------------------------------
+
 
 
 Return_code _dfr_ctor                             (Dfr* dfr, const char* name, const char* file, const char* func, int line);
@@ -208,12 +216,15 @@ bool   are_associative        (Operation_code op_left, Operation_code op_right);
 Return_code read_number   (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_variable (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_unary    (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
+Return_code read_power    (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_sum      (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr);
 Return_code read_general  (Dfr_buffer* dfr_buffer, Tree* tree);
 
 bool is_variable_start (char simbol);
 bool is_variable_mid   (char simbol);
+bool is_unary          (Node* node);
 
 Return_code dfr_read_user_function             (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
 
@@ -298,6 +309,7 @@ Return_code operation_fold_neutral (Node* node, bool* folded_anything);
 
 Return_code  dfr_buffer_ctor       (Dfr_buffer* dfr_buffer);
 Return_code  dfr_buffer_dtor       (Dfr_buffer* dfr_buffer);
+Return_code  dfr_buffer_dump       (Dfr_buffer* buffer);
 Return_code _dfr_buffer_read       (Dfr_buffer* dfr_buffer, char* str);
 Return_code  read_buffer_operation (char** str_ptr, Buffer_node* buffer_node);
 Return_code  read_buffer_variable  (char** str_ptr, Buffer_node* buffer_node);

@@ -16,7 +16,7 @@ int main (void) {
 
     char  variable [MAX_VARIABLE_LEN] = "x";
     double taylor_point               = 1;
-    size_t depth                      = 5;
+    size_t depth                      = 6;
     double tangent_point              = 1;
 
 
@@ -37,6 +37,8 @@ int main (void) {
     return_code = dfr_read_user_function (&dfr);
     printf ("reader        return code - %d\n", return_code); 
     if (return_code) { dfr_sorry_message; return 0; }
+
+    //FTREE_GRAPHDUMP (dfr.user_function_tree);
 
 
     return_code = tex_generate_output    (&dfr, variable, taylor_point, depth, tangent_point);

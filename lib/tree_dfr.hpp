@@ -932,6 +932,12 @@ const char*  _operation_code_to_str  (Operation_code operation_code) {
         case DOC_SUB:  return "-";
         case DOC_MULT: return "*";
         case DOC_DIV:  return "/";
+        case DOC_POW:  return "**";
+        case DOC_LN:   return "ln";
+        case DOC_SIN:  return "sin";
+        case DOC_COS:  return "cos";
+        case DOC_TG:   return "tan";
+        case DOC_CTG:  return "cot";
 
         default: return "UNKNOWN";
     }
