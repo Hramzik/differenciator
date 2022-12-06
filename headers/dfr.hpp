@@ -186,7 +186,7 @@ typedef struct Tree_substitution {
 const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at least function and 1st derivative
 const size_t MAX_PREAMBLE_LEN   = ceil (log (MAX_TAYLOR_DEPTH) / log (10)) + strlen ("'th derivative:        ");
 const size_t MAX_PHRASE_LEN     = 100;
-const size_t MAX_SUBSTITUTIONS  = 100;
+const size_t MAX_SUBSTITUTIONS  = 1000;
 const size_t MAX_TEX_LEN        = 50;
 const size_t ALPHABET_LEN       = 24;
 //--------------------------------------------------
