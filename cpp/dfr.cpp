@@ -20,6 +20,7 @@ Return_code  _dfr_ctor  (Dfr* dfr, const char* name, const char* file, const cha
     dfr_buffer_ctor (dfr->buffer);
 
     dfr->user_function_tree = nullptr;
+    dfr->tangent            = nullptr;
 
 
     dfr->derivative_trees_array = (Tree**) calloc (sizeof (Tree*) * MAX_DERIVATIVE_NUM, 1);
@@ -78,11 +79,19 @@ Return_code  dfr_dtor  (Dfr* dfr) {
     if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (dfr->user_function_tree) free (dfr->user_function_tree);
 
-    dfr_derivative_trees_dtor (dfr);
+    if (dfr->user_function_tree) { try (tree_dtor (dfr->user_function_tree)); free (dfr->user_function_tree); dfr->user_function_tree = nullptr; }
+    if (dfr->tangent)            { try (tree_dtor (dfr->tangent));             free (dfr->tangent);            dfr->tangent            = nullptr; }
 
-    dfr_buffer_dtor (dfr->buffer);
+
+    try (dfr_derivative_trees_dtor (dfr));
+
+
+    try (dfr_taylor_dtor (dfr));
+
+
+    try (dfr_buffer_dtor (dfr->buffer));
+    dfr->buffer = nullptr;
 
 
     return SUCCESS;
@@ -99,6 +108,24 @@ Return_code  dfr_derivative_trees_dtor  (Dfr* dfr) {
         if (dfr->derivative_trees_array [i]) {
 
             tree_dtor (dfr->derivative_trees_array [i]);
+        }
+    }
+
+
+    return SUCCESS;
+}
+
+
+Return_code  dfr_taylor_dtor  (Dfr* dfr) {
+
+    if (!dfr || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    for (size_t i = 0; i < MAX_TAYLOR_DEPTH; i++) {
+    
+        if (dfr->taylor [i]) {
+
+            tree_dtor (dfr->taylor [i]);
         }
     }
 
@@ -191,7 +218,7 @@ size_t  get_operation_priority  (Operation_code operation_code) {
 Return_code  read_number  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_node, Node** node_ptr) {
 
     if (!buffer_node_ptr || ((*buffer_node_ptr)->atom_type != DAT_CONST)
-                         || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+                         || (*buffer_node_ptr >= max_buffer_node) || !node_ptr || !isfinite ((*buffer_node_ptr)->val_double) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     (*node_ptr) = create_node (DAT_CONST, (*buffer_node_ptr)->val_double);
@@ -258,13 +285,13 @@ Return_code  read_primary  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
 
         *buffer_node_ptr += 1;
 
-        read_sum (buffer_node_ptr, max_buffer_node, node_ptr);
+        try (read_sum (buffer_node_ptr, max_buffer_node, node_ptr));
 
         *buffer_node_ptr += 1;
     }
 
-    else if ( (*buffer_node_ptr)->atom_type == DAT_VARIABLE ) { read_variable (buffer_node_ptr, max_buffer_node, node_ptr); }
-    else                                                      { read_number   (buffer_node_ptr, max_buffer_node, node_ptr); }
+    else if ( (*buffer_node_ptr)->atom_type == DAT_VARIABLE ) { try (read_variable (buffer_node_ptr, max_buffer_node, node_ptr)); }
+    else                                                      { try (read_number   (buffer_node_ptr, max_buffer_node, node_ptr)); }
 
 
     return SUCCESS;
@@ -276,7 +303,7 @@ Return_code  read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
     if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    read_primary (buffer_node_ptr, max_buffer_node, node_ptr);
+    try (read_primary (buffer_node_ptr, max_buffer_node, node_ptr));
 
 
     Node* new_node = nullptr;
@@ -301,7 +328,7 @@ Return_code  read_product  (Buffer_node** buffer_node_ptr, Buffer_node* max_buff
 
         *node_ptr = new_node;
 
-        read_primary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son);
+        try (read_primary (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son));
     }
 
 
@@ -314,7 +341,7 @@ Return_code  read_sum  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_n
     if (!buffer_node_ptr || (*buffer_node_ptr >= max_buffer_node) || !node_ptr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    read_product (buffer_node_ptr, max_buffer_node, node_ptr);
+    try (read_product (buffer_node_ptr, max_buffer_node, node_ptr));
 
 
     Node* new_node = nullptr;
@@ -339,7 +366,7 @@ Return_code  read_sum  (Buffer_node** buffer_node_ptr, Buffer_node* max_buffer_n
 
         *node_ptr = new_node;
 
-        read_product (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son);
+        try (read_product (buffer_node_ptr, max_buffer_node, &(*node_ptr)->right_son));
     }
 
 
@@ -355,10 +382,10 @@ Return_code  read_general  (Dfr_buffer* dfr_buffer, Tree* tree) {
     Buffer_node* current_buffer_node = dfr_buffer->buffer;
 
 
-    read_sum (&current_buffer_node, dfr_buffer->buffer + dfr_buffer->len, &tree->root);
+    try (read_sum (&current_buffer_node, dfr_buffer->buffer + dfr_buffer->len, &tree->root));
 
 
-    assert (current_buffer_node == dfr_buffer->buffer + dfr_buffer->len);
+    if (current_buffer_node != (dfr_buffer->buffer + dfr_buffer->len) ) return BAD_ARGS;
 
 
     return SUCCESS;
@@ -384,6 +411,7 @@ Return_code  dfr_read_user_function  (Dfr* dfr, const char* file_name) {
 
 
     dfr_user_function_tree_ctor (dfr);
+
 
     try (read_general (dfr->buffer, dfr->user_function_tree));
 
@@ -430,8 +458,10 @@ Return_code  dfr_write_user_function  (Dfr* dfr, const char* file_name) {
     if (!dfr || !file_name || !dfr->user_function_tree || !dfr->derivative_trees_array || !dfr->derivative_trees_array [0]) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    try (write_function (dfr->user_function_tree,         file_name, "your function:          "));
-    try (write_function (dfr->derivative_trees_array [0], file_name, "\nyour function (folded): "));
+    try (write_text_function (file_name, "%s", "your function:          "));
+    try (write_function (dfr->user_function_tree,         file_name));
+    try (write_text_function (file_name, "%s", "\nyour function (folded): "));
+    try (write_function (dfr->derivative_trees_array [0], file_name));
 
 
     return SUCCESS;
@@ -454,7 +484,8 @@ Return_code  dfr_write_derivative  (Dfr* dfr, size_t derivative_num, const char*
     sprintf (preamble, "\n%zd%s derivative:        ", derivative_num, ordinal_ending (derivative_num));
 
 
-    try (write_function (dfr->derivative_trees_array [derivative_num], file_name, preamble));
+    try (write_text_function (file_name, preamble))
+    try (write_function (dfr->derivative_trees_array [derivative_num], file_name));
 
 
     return SUCCESS;
@@ -466,7 +497,8 @@ Return_code  dfr_write_taylor  (Dfr* dfr, const char* variable, size_t depth, co
     if (!dfr || !file_name || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    try (write_function (dfr->taylor [0], file_name, "\ntaylor:                 " ));
+    try (write_text_function (file_name, "\ntaylor:                 "))
+    try (write_function (dfr->taylor [0], file_name));
 
 
     for (size_t i = 1; i <= depth; i++) {
@@ -524,24 +556,23 @@ Return_code  write_text_function (const char* file_name, const char* format, ...
 }
 
 
-Return_code  write_function  (Tree* tree, const char* file_name, const char* additional_text) {
+Return_code  write_function  (Tree* tree, const char* file_name, const char* file_mode) {
 
     if (!tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     static bool first_time_writing = true;
 
-    const char* file_mode = nullptr;
 
-    if (first_time_writing) { file_mode = "w"; }
-    else                    { file_mode = "a"; }
+    if (strcmp (file_mode, "w") && strcmp (file_mode, "a")) {
+
+        if (first_time_writing) { file_mode = "w"; }
+        else                    { file_mode = "a"; }
+    }
+
 
     FILE* file = fopen (file_name, file_mode);
     if (file == nullptr) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
-
-
-
-    fprintf (file, "%s", additional_text);
 
 
     Tree_iterator tree_iterator = {};
@@ -877,75 +908,89 @@ Node*  variable_calculate_derivative  (Node* node, const char* variable) {
 }
 
 
-bool  tree_fold_constants  (Tree* tree) {
+Return_code  tree_fold_constants  (Tree* tree, bool* folded_anything) {
 
-    if (!tree) { LOG_ERROR (BAD_ARGS); return false; }
+    if (!tree || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    return node_fold_constants (tree->root);
+    try (node_fold_constants (tree->root, folded_anything));
+
+
+    return SUCCESS;
 }
 
 
-bool  node_fold_constants  (Node* node) {
+Return_code  node_fold_constants  (Node* node, bool* folded_anything) {
 
-    if (!node) { LOG_ERROR (BAD_ARGS); return false; }
-
-
-    bool folded_anything = 0;
+    if (!node || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (node-> left_son) { folded_anything |= node_fold_constants (node-> left_son); }
-    if (node->right_son) { folded_anything |= node_fold_constants (node->right_son); }
+
+    if (node-> left_son) { try (node_fold_constants (node-> left_son, folded_anything)); }
+    if (node->right_son) { try (node_fold_constants (node->right_son, folded_anything)); }
 
 
     switch (node->atom_type) {
 
-        case DAT_OPERATION: folded_anything |= operation_fold_constants (node); break;
+        case DAT_OPERATION: try (operation_fold_constants (node, folded_anything)); break;
         case DAT_CONST:     break;
         case DAT_VARIABLE:  break;
 
-        default: LOG_ERROR (BAD_ARGS); return false;
+        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
 
-    return folded_anything;
+    return SUCCESS;
 }
 
 
-bool  operation_fold_constants  (Node* node) {
+//--------------------------------------------------
+#define MY_VAL    node->element.value.val_double
+#define LEFT_VAL  node->left_son->element.value.val_double
+#define RIGHT_VAL node->right_son->element.value.val_double
+#define I_FOLDED  *folded_anything = true
+//--------------------------------------------------
 
-    if (!node || (node->atom_type != DAT_OPERATION) ) { LOG_ERROR (BAD_ARGS); return false; }
+
+Return_code  operation_fold_constants  (Node* node, bool* folded_anything) {
+
+    if (!node || (node->atom_type != DAT_OPERATION) || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (node->left_son->atom_type != DAT_CONST || node->right_son->atom_type != DAT_CONST) { return false; }
+    if (node->left_son->atom_type != DAT_CONST || node->right_son->atom_type != DAT_CONST) { return SUCCESS; }
+
+
+    if (!isfinite (LEFT_VAL) || !isfinite (RIGHT_VAL)) return BAD_ARGS;
+
 
 
     switch (node->element.value.val_operation_code) {
 
-        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return false;
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
 
         case DOC_ADD:
 
-            node->element.value.val_double = node->left_son->element.value.val_double + node->right_son->element.value.val_double;
+            MY_VAL = LEFT_VAL + RIGHT_VAL; I_FOLDED;
             break;
 
         case DOC_SUB:
 
-            node->element.value.val_double = node->left_son->element.value.val_double - node->right_son->element.value.val_double;
+            MY_VAL = LEFT_VAL - RIGHT_VAL; I_FOLDED;
             break;
 
         case DOC_MULT:
 
-            node->element.value.val_double = node->left_son->element.value.val_double * node->right_son->element.value.val_double;
+            MY_VAL = LEFT_VAL * RIGHT_VAL; I_FOLDED;
             break;
 
         case DOC_DIV:
 
-            node->element.value.val_double = node->left_son->element.value.val_double / node->right_son->element.value.val_double;
+            if (double_equal (RIGHT_VAL, 0)) return BAD_ARGS;
+            MY_VAL = LEFT_VAL / RIGHT_VAL; I_FOLDED;
             break;
 
 
-        default: LOG_ERROR (BAD_ARGS); return false;
+        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
 
@@ -958,8 +1003,16 @@ bool  operation_fold_constants  (Node* node) {
     node-> left_son = nullptr;
 
 
-    return true;
+    return SUCCESS;
 }
+
+
+//--------------------------------------------------
+#undef MY_VAL
+#undef LEFT_VAL
+#undef RIGHT_VAL
+#undef I_FOLDED
+//--------------------------------------------------
 
 
 Node*  copy_node  (Node* node) {
@@ -988,44 +1041,42 @@ Node*  copy_node  (Node* node) {
 }
 
 
-bool  tree_fold_neutral  (Tree* tree) {
+Return_code  tree_fold_neutral  (Tree* tree, bool* folded_anything) {
 
-    if (!tree) { LOG_ERROR (BAD_ARGS); return false; }
+    if (!tree || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    return node_fold_neutral (tree->root);
+    try (node_fold_neutral (tree->root, folded_anything));
+
+
+    return SUCCESS;
 }
 
 
-bool  node_fold_neutral  (Node* node) {
+Return_code  node_fold_neutral  (Node* node, bool* folded_anything) {
 
-    if (!node) { LOG_ERROR (BAD_ARGS); return false; }
-
-
-    bool folded_anything = 0;
+    if (!node || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (node-> left_son) { folded_anything |= node_fold_neutral (node-> left_son); }
-    if (node->right_son) { folded_anything |= node_fold_neutral (node->right_son); }
+    if (node-> left_son) { try (node_fold_neutral (node-> left_son, folded_anything)); }
+    if (node->right_son) { try (node_fold_neutral (node->right_son, folded_anything)); }
 
 
     switch (node->atom_type) {
 
-        case DAT_OPERATION: folded_anything |= operation_fold_neutral (node); break;
+        case DAT_OPERATION: try (operation_fold_neutral (node, folded_anything)); break;
         case DAT_CONST:     break;
         case DAT_VARIABLE:  break;
 
-        default: LOG_ERROR (BAD_ARGS); return false;
+        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
 
-    return folded_anything;
+    return SUCCESS;
 }
 
 
 //--------------------------------------------------
-
-
 #define LEFT  node-> left_son
 #define RIGHT node->right_son
 
@@ -1036,12 +1087,14 @@ bool  node_fold_neutral  (Node* node) {
 #define PROMOTE_LEFT\
     _node_dtor (RIGHT);\
     node_realloc (LEFT, node);\
-    return true;
+    *folded_anything = true;\
+    return SUCCESS;
 
 #define PROMOTE_RIGHT\
     _node_dtor (LEFT);\
     node_realloc (RIGHT, node);\
-    return true;
+    *folded_anything = true;\
+    return SUCCESS;
 
 #define NODE_TO_0\
     _node_dtor (LEFT);\
@@ -1051,20 +1104,19 @@ bool  node_fold_neutral  (Node* node) {
     node->CONST     = 0;\
     node-> left_son = nullptr;\
     node->right_son = nullptr;\
-    return true;
-
-
+    *folded_anything = true;\
+    return SUCCESS;
 //--------------------------------------------------
 
 
-bool  operation_fold_neutral  (Node* node) {
+Return_code  operation_fold_neutral  (Node* node, bool* folded_anything) {
 
-    if (!node || (node->atom_type != DAT_OPERATION) ) { LOG_ERROR (BAD_ARGS); return false; }
+    if (!node || (node->atom_type != DAT_OPERATION) || !folded_anything) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     switch (node->OPERATION_CODE) {
 
-        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return false;
+        case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
 
         case DOC_ADD:
 
@@ -1095,15 +1147,29 @@ bool  operation_fold_neutral  (Node* node) {
 
             if (LEFT-> atom_type == DAT_CONST && double_equal (LEFT-> CONST, 0) ) { NODE_TO_0 }
 
+            if (RIGHT->atom_type == DAT_CONST && double_equal (RIGHT->CONST, 0) ) { return BAD_ARGS; }
+
             break;
 
 
-        default: LOG_ERROR (BAD_ARGS); return false;
+        default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
 
 
-    return false;
+    return SUCCESS;
 }
+
+
+//--------------------------------------------------
+#undef LEFT
+#undef RIGHT
+#undef OPERATION_CODE
+#undef CONST
+#undef VARIABLE
+#undef PROMOTE_LEFT
+#undef PROMOTE_RIGHT
+#undef NODE_TO_0
+//--------------------------------------------------
 
 
 Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
@@ -1121,14 +1187,14 @@ Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
 
 
 
-    bool  folded_anything_now = true;
+    bool folded_anything_now = true;
 
     while (folded_anything_now) {
 
         folded_anything_now = false;
 
-        folded_anything_now |= tree_fold_constants (tree);
-        folded_anything_now |= tree_fold_neutral   (tree);
+        try (tree_fold_constants (tree, &folded_anything_now));
+        try (tree_fold_neutral   (tree, &folded_anything_now));
 
 
         if (!silent && folded_anything_now) {
@@ -1159,7 +1225,7 @@ Return_code  _dfr_buffer_read  (Dfr_buffer* dfr_buffer, char* str) {
     skipspaces (&str);
 
     while (str < str_max) {
-//printf ("str - %s\n", str);
+
         read_buffer_operation (&str, &dfr_buffer->buffer [cur_node]);
         skipspaces (&str);
         cur_node += 1;
@@ -1309,45 +1375,51 @@ Return_code  dfr_buffer_dtor  (Dfr_buffer* dfr_buffer) {
     if (!dfr_buffer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
+
     for (size_t i = 0; i < dfr_buffer->len; i++) {
-    
-        free (&dfr_buffer->buffer [i]);
+
+        if (dfr_buffer->buffer [i].atom_type == DAT_VARIABLE) {
+
+            free (dfr_buffer->buffer [i].val_str);
+        }
     }
 
 
+
     free (dfr_buffer->buffer);
+
+
+    dfr_buffer->buffer = nullptr;
 
 
     return SUCCESS;
 }
 
 
-Tree*  tree_evaluate  (Tree* tree, const char* variable, double value, bool silent, FILE* file) {
+Return_code  tree_evaluate  (Tree* tree, Tree* answer, const char* variable, double value, bool silent, FILE* file) {
 
-    if (!tree || !variable || isnan (value)) { LOG_ERROR (BAD_ARGS); return nullptr; }
+    if (!tree || !answer || !variable || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
     if (!silent && !file) { LOG_MESSAGE ("can't write into nullptr file! (specify write file if you didn't)"); silent = true; }
 
 
-    Tree* answer = (Tree*) calloc (TREE_SIZE, 1);
-    TREE_CTOR (answer);
-    tree_kill_root (answer);
+    if (answer->root) node_dtor (answer->root);
 
 
     answer->root = copy_node (tree->root);
     tree_substitute_variable (answer, variable, value);
 
 
-    tree_fold (answer, silent, file);
+    try (tree_fold (answer, silent, file));
 
 
-    return answer;
+    return SUCCESS;
 }
 
 
 Return_code  tree_substitute_variable  (Tree* tree, const char* variable, double value) {
 
-    if (!tree || ! variable || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!tree || ! variable || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     if (!tree->root) return SUCCESS;
@@ -1362,7 +1434,7 @@ Return_code  tree_substitute_variable  (Tree* tree, const char* variable, double
 
 Return_code  node_substitute_variable  (Node* node, const char* variable, double value) {
 
-    if (!node || ! variable || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!node || ! variable || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     if (node->atom_type == DAT_VARIABLE && !strcmp (node->element.value.var_str, variable) ) {
@@ -1380,9 +1452,9 @@ Return_code  node_substitute_variable  (Node* node, const char* variable, double
 }
 
 
-Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth, bool silent, FILE* file) {
+Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point, size_t depth, bool silent, FILE* file) {
 
-    if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!dfr || !variable ||!isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
     if (!dfr->derivative_trees_array [0]) {
 
@@ -1395,16 +1467,24 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth
 
 
 
-    if (!silent) tex_write_taylor_introduction (file, depth, variable);
+    if (!silent) tex_write_taylor_introduction (file, depth, variable, point);
 
 
     for (size_t i = 0; i <= depth; i++) {
 
         try (dfr_ensure_derivative (dfr, variable, i));
 
-        if (!silent) tex_write_evaluation_introduction (file, i, 0);
-        Tree* evaluation_tree =  tree_evaluate (dfr->derivative_trees_array [i], variable, 0, silent, file);
-        if (!silent) tex_write_evaluation_ending (file, i, 0, evaluation_tree);
+
+
+        if (!silent) tex_write_evaluation_introduction (file, i, point);
+
+
+        Tree* evaluation_tree = (Tree*) calloc (TREE_SIZE, 1); TREE_CTOR (evaluation_tree);
+        try (tree_evaluate (dfr->derivative_trees_array [i], evaluation_tree, variable, point, silent, file));
+
+
+        if (!silent) tex_write_evaluation_ending (file, i, point, evaluation_tree);
+
 
 
         Tree* cur_taylor_tree = (Tree*) calloc (TREE_SIZE, 1);
@@ -1423,14 +1503,14 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, size_t depth
 
 
 
-        tree_fold (cur_taylor_tree);
+        try (tree_fold (cur_taylor_tree));
 
 
         dfr->taylor [i] = cur_taylor_tree;
     }
 
 
-    if (!silent) tex_write_taylor_ending (file, dfr, depth, variable);
+    if (!silent) tex_write_taylor_ending (file, dfr, depth, variable, point);
 
 
     return SUCCESS;
@@ -1631,7 +1711,7 @@ Return_code  tex_write_check_closing_bracket  (FILE* file, Node* left, Node* rig
 }
 
 
-Return_code  tex_generate_output  (Dfr* dfr, const char* variable, size_t depth, const char* file_name) {
+Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor_point, size_t depth, double tangent_point, const char* file_name) {
 
     if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1648,12 +1728,13 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, size_t depth,
     if (!file) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
 
 
-    tex_write_preamble      (file);
-    tex_write_introduction  (file, dfr, variable);
-    tex_write_user_function (file, dfr, variable);
-    tex_write_derivative    (file, dfr, variable);
-    tex_write_taylor        (file, dfr, variable, depth);
-    tex_write_end           (file);
+    try (tex_write_preamble      (file));
+    try (tex_write_introduction  (file, dfr, variable));
+    try (tex_write_user_function (file, dfr, variable));
+    try (tex_write_derivative    (file, dfr, variable));
+    try (tex_write_taylor        (file, dfr, variable, taylor_point, depth));
+    try (tex_write_graph         (file, dfr, variable, tangent_point));
+    try (tex_write_end           (file));
 
 
     return SUCCESS;
@@ -1793,12 +1874,12 @@ Return_code  tex_write_function_name  (FILE* file, size_t derivative_num) {
 }
 
 
-Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, size_t depth) {
+Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, double point, size_t depth) {
 
-    if (!dfr || !variable || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!file || !dfr || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    dfr_calculate_taylor (dfr, variable, depth, false, file);
+    try (dfr_calculate_taylor (dfr, variable, point, depth, false, file));
 
 
     return SUCCESS;
@@ -1807,7 +1888,7 @@ Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, size
 
 Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_num, double value) {
 
-    if (!file || isnan (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!file || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\\subsection {давайте найдем $");
@@ -1829,7 +1910,7 @@ Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_n
 
 Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, double value, Tree* answer) {
 
-    if (!file || isnan (value) || !answer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!file || !isfinite (value) || !answer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\n");
@@ -1847,16 +1928,16 @@ Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, do
 }
 
 
-Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const char* variable) {
+Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const char* variable, double point) {
 
-    if (!file || !variable) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!file || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\\section {Разложение в ряд тейлора}\n");
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "давайте найдем разложение в ряд тейлора функции $");
     tex_write_function_name (file, 0);
-    fprintf (file, "(%s)$ в точке 0 до o($%s^%zd$)\n", variable, variable, depth);
+    fprintf (file, "(%s)$ в точке %.1lf до o($(%s - %.1lf)^%zd$)\n", variable, point, variable, point, depth);
     fprintf (file, "\\end {flushleft}\n\n");
 
 
@@ -1864,13 +1945,13 @@ Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const cha
 }
 
 
-Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const char* variable) {
+Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const char* variable, double point) {
 
-    if (!dfr || !file || !variable || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!dfr || !file || !variable || !isfinite (point) || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\\begin {flushleft}\n");
-    fprintf (file, "разложение функции %s(%s) в ряд тейлора в точке 0: \n", USER_FUNCTION_NAME, variable);
+    fprintf (file, "разложение функции %s(%s) в ряд тейлора в точке %.1lf: \n", USER_FUNCTION_NAME, variable, point);
     fprintf (file, "\\end {flushleft}\n");
     fprintf (file, "\n\n$$");
 
@@ -1881,12 +1962,12 @@ Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const
 
         fprintf (file, " + (");
         try (tex_write_tree (file, dfr->taylor [i]));
-        fprintf (file, ") * %s^%zd", variable, i);
+        fprintf (file, ") * (%s - %.1lf)^%zd", variable, point, i);
 
     }
 
 
-    fprintf (file, " + o(%s^%zd)", variable, depth);
+    fprintf (file, " + o((%s - %.1lf)^%zd)", variable, point, depth);
 
 
     fprintf (file, "$$\n\n");
@@ -1952,7 +2033,7 @@ Return_code  tex_write_user_function  (FILE* file, Dfr* dfr, const char* variabl
 
 
     tex_write_user_function_introduction (file, variable);
-    tree_fold                            (dfr->derivative_trees_array [0], false, file);
+    try (tree_fold                       (dfr->derivative_trees_array [0], false, file));
     tex_write_user_function_ending       (file, dfr, variable);
 
 
@@ -1994,7 +2075,7 @@ Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* 
 
 Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitution_list) {
 
-    if (!node || !len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!node || !len_ptr || !isfinite (*len_ptr) || !isfinite (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
 
@@ -2002,7 +2083,7 @@ Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coeffici
 
         double substitution_len = get_tex_substitution_len (substitution_list, node);
 
-        if (!isnan (substitution_len)) {
+        if (!!isfinite (substitution_len)) {
 
             *len_ptr += len_coefficient * substitution_len;
             return SUCCESS;
@@ -2024,7 +2105,7 @@ Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coeffici
 
 Return_code  double_get_tex_len  (double value, double* len_ptr, double len_coefficient) {
 
-    if (!len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!len_ptr || !isfinite (*len_ptr) || !isfinite (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     if (value < 0) { *len_ptr += len_coefficient * 1; value *= -1; } //for -
@@ -2054,7 +2135,7 @@ size_t  size_t_get_tex_len  (size_t value) {
 
 Return_code  variable_get_tex_len  (const char* variable, double* len_ptr, double len_coefficient) {
 
-    if (!variable || !len_ptr || isnan (*len_ptr) || isnan (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!variable || !len_ptr || !isfinite (*len_ptr) || !isfinite (len_coefficient) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     *len_ptr += len_coefficient * (double) strlen (variable);
@@ -2066,7 +2147,7 @@ Return_code  variable_get_tex_len  (const char* variable, double* len_ptr, doubl
 
 Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitutions) {
 
-    if (!node || (node->atom_type != DAT_OPERATION) || isnan (*len_ptr) || isnan (len_coefficient)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!node || (node->atom_type != DAT_OPERATION) || !isfinite (*len_ptr) || !isfinite (len_coefficient)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     switch (node->element.value.val_operation_code) {
@@ -2527,5 +2608,138 @@ bool  sons_the_same  (Node* node1, Node* node2, bool is_symmetric_operation) {
 
 
     return ans;
+}
+
+
+Return_code  dfr_generate_gnu_plot_describtion  (Dfr* dfr, const char* variable, const char* file_name) {
+
+    if (!dfr || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+    if (!dfr->user_function_tree) { LOG_MESSAGE ("fill user function first!"); return BAD_ARGS; }
+    if (!dfr->tangent)            { LOG_MESSAGE ("fill tangent  first!"); return BAD_ARGS; }
+
+
+
+    FILE* file = fopen (file_name, "w"); if (!file) { LOG_ERROR (FILE_ERR); return FILE_ERR; }
+
+
+    fprintf (file, "set terminal png size 1280, 940 crop\n");
+    fprintf (file, "set output \"%s\"\n", dfr_gnu_plot_file_name);
+    fprintf (file, "set xlabel \"x\"\n");
+    fprintf (file, "set ylabel \"y\"\n");
+
+    fprintf (file, "set title  \"%s(%s) = ", USER_FUNCTION_NAME, variable);
+    fclose (file);
+    write_function      (dfr->user_function_tree, file_name, "a");
+    write_text_function (file_name, "%s", "\"\n");
+
+    write_text_function (file_name, "%s", "plot ");
+
+
+    write_function      (dfr->user_function_tree, file_name, "a");
+    write_text_function (file_name, "%s", ", ");
+    write_function      (dfr->tangent, file_name, "a");
+
+
+    return SUCCESS;
+}
+
+
+Return_code  dfr_calculate_tangent  (Dfr* dfr, const char* variable, double point) {
+
+    if (!dfr || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+    if (!dfr->derivative_trees_array [0]) { LOG_MESSAGE ("fill up derivative_trees_array [0] first!"); return BAD_ARGS; }
+
+
+    dfr_ensure_derivative (dfr, variable, 1);
+
+
+
+    Tree* shift = (Tree*) calloc (TREE_SIZE, 1); TREE_CTOR (shift);
+    Tree* slope = (Tree*) calloc (TREE_SIZE, 1); TREE_CTOR (slope);
+
+
+    try (tree_evaluate (dfr->derivative_trees_array [0], shift, variable, point));
+    try (tree_evaluate (dfr->derivative_trees_array [1], slope, variable, point));
+
+
+
+    dfr->tangent = (Tree*) calloc (TREE_SIZE, 1);
+    dfr->tangent->root                                  = create_node (DAT_OPERATION, DOC_ADD);
+    dfr->tangent->root->left_son                        = shift->root; tree_kill_tree (shift);
+    dfr->tangent->root->right_son                       = create_node (DAT_OPERATION, DOC_MULT);
+    dfr->tangent->root->right_son->left_son             = slope->root; tree_kill_tree (slope);
+    dfr->tangent->root->right_son->right_son            = create_node (DAT_OPERATION, DOC_SUB);
+    dfr->tangent->root->right_son->right_son->left_son  = create_node (DAT_VARIABLE, variable);
+    dfr->tangent->root->right_son->right_son->right_son = create_node (DAT_CONST, point);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  dfr_generate_graph  (Dfr* dfr, const char* variable, double point) {
+
+    if (!dfr || !variable || !isfinite (point)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    try (dfr_calculate_tangent (dfr, variable, point));
+    try (dfr_generate_gnu_plot_describtion (dfr, variable));
+
+
+    char system_call [MAX_COMMAND_LEN] = "gnuplot ";
+    strcat (system_call, dfr_gnu_plot_describtion_file_name);
+
+    system (system_call);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_write_graph  (FILE* file, Dfr* dfr, const char* variable, double point) {
+
+    if (!file || !dfr || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    try (dfr_generate_graph (dfr, variable, point));
+
+
+    fprintf (file, "\\section {график функции}\n");
+    fprintf (file, "\\includegraphics [scale=0.6] {%s}", dfr_gnu_plot_file_name);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  tex_generate_pdf  (const char* file_name) {
+
+    if (!file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    char command [MAX_COMMAND_LEN] = "pdflatex ";
+    strcat (command, dfr_default_tex_file_name);
+    strcat (command, " -quiet");
+    strcat (command, " -output-directory work");
+
+
+    system (command);
+
+
+    return SUCCESS;
+}
+
+
+Return_code  _dfr_sorry_message  (const char* file, const char* func, int line) {
+
+    printf ("\n-------------------------------------------------\n");
+    printf ("something went wrong... please, check your input!\n");
+    printf ("(file %s, function %s, line %d)\n", file, func, line);
+    printf ("-------------------------------------------------\n\n");
+
+
+    return SUCCESS;
 }
 
