@@ -18,15 +18,17 @@ int main (void) {
     double taylor_point               = 1;
     size_t depth                      = 6;
     double tangent_point              = 1;
+    int precision                     = 1;
 
 
     if (INTERACTIVE_MODE) {
 
         printf ("\n");
-        printf ("please, enter variable name:\n\n>> "); scanf ("%s", variable);        printf ("\n");
+        printf ("please, enter variable name:\n\n>> "); scanf ("%s",   variable);      printf ("\n");
         printf ("please, enter taylor point:\n\n>> ");  scanf ("%lf", &taylor_point);  printf ("\n");
         printf ("please, enter taylor depth:\n\n>> ");  scanf ("%zd", &depth);         printf ("\n");
         printf ("please, enter tangent point:\n\n>> "); scanf ("%lf", &tangent_point); printf ("\n");
+        printf ("please, enter precision:\n\n>> ");     scanf ("%d",  &precision);     printf ("\n");
     }
 
 
@@ -41,7 +43,7 @@ int main (void) {
     //FTREE_GRAPHDUMP (dfr.user_function_tree);
 
 
-    return_code = tex_generate_output    (&dfr, variable, taylor_point, depth, tangent_point);
+    return_code = tex_generate_output    (&dfr, variable, taylor_point, depth, tangent_point, precision);
     printf ("tex generator return code - %d\n", return_code);
     if (return_code) { dfr_sorry_message; return 0; }
 

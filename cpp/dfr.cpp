@@ -572,22 +572,22 @@ void  _fdfr_graphdump  (Dfr* dfr, const char* file_name, const char* file, const
 }
 */
 
-Return_code  dfr_write_user_function  (Dfr* dfr, const char* file_name) {
+Return_code  dfr_write_user_function  (Dfr* dfr, int precision, const char* file_name) {
 
     if (!dfr || !file_name || !dfr->user_function_tree || !dfr->derivative_trees_array || !dfr->derivative_trees_array [0]) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     try (write_text_function (file_name, "%s", "your function:          "));
-    try (write_function (dfr->user_function_tree,         file_name));
+    try (write_function (dfr->user_function_tree, precision, file_name));
     try (write_text_function (file_name, "%s", "\nyour function (folded): "));
-    try (write_function (dfr->derivative_trees_array [0], file_name));
+    try (write_function (dfr->derivative_trees_array [0], precision, file_name));
 
 
     return SUCCESS;
 }
 
 
-Return_code  dfr_write_derivative  (Dfr* dfr, size_t derivative_num, const char* file_name) {
+Return_code  dfr_write_derivative  (Dfr* dfr, int precision, size_t derivative_num, const char* file_name) {
 
     if (!dfr || !file_name || !dfr->derivative_trees_array || !dfr->derivative_trees_array [derivative_num]) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -604,26 +604,26 @@ Return_code  dfr_write_derivative  (Dfr* dfr, size_t derivative_num, const char*
 
 
     try (write_text_function (file_name, preamble))
-    try (write_function (dfr->derivative_trees_array [derivative_num], file_name));
+    try (write_function (dfr->derivative_trees_array [derivative_num], precision, file_name));
 
 
     return SUCCESS;
 }
 
 
-Return_code  dfr_write_taylor  (Dfr* dfr, const char* variable, size_t depth, const char* file_name) {
+Return_code  dfr_write_taylor  (Dfr* dfr, const char* variable, size_t depth, int precision, const char* file_name) {
 
     if (!dfr || !file_name || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     try (write_text_function (file_name, "\ntaylor:                 "))
-    try (write_function (dfr->taylor [0], file_name));
+    try (write_function (dfr->taylor [0], precision, file_name));
 
 
     for (size_t i = 1; i <= depth; i++) {
 
         try (write_text_function (file_name, " + ("));
-        try (write_function (dfr->taylor [i], file_name));
+        try (write_function (dfr->taylor [i], precision, file_name));
         try (write_text_function (file_name, ") * %s^%zd", variable, i));
 
     }
@@ -675,7 +675,7 @@ Return_code  write_text_function (const char* file_name, const char* format, ...
 }
 
 
-Return_code  write_function  (Tree* tree, const char* file_name, const char* file_mode) {
+Return_code  write_function  (Tree* tree, int precision, const char* file_name, const char* file_mode) {
 
     if (!tree || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -706,7 +706,7 @@ Return_code  write_function  (Tree* tree, const char* file_name, const char* fil
         switch (tree_iterator.current->atom_type) {
 
             case DAT_OPERATION: fprintf (file, " %s ", _operation_code_to_str (tree_iterator.current->element.value.val_operation_code)); break;
-            case DAT_CONST:     fprintf (file, "%.1lf",                        tree_iterator.current->element.value.val_double);          break;
+            case DAT_CONST:     fprintf (file, "%.*lf", precision,             tree_iterator.current->element.value.val_double);          break;
             case DAT_VARIABLE:  fprintf (file, "%s",                           tree_iterator.current->element.value.var_str);             break;
 
             default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
@@ -889,7 +889,7 @@ Return_code  write_function_check_closing_bracket  (FILE* file, Tree_iterator* t
 }
 
 
-Return_code  dfr_calculate_derivative  (Dfr* dfr, const char* variable, size_t derivative_num, bool silent, FILE* file) {
+Return_code  dfr_calculate_derivative  (Dfr* dfr, const char* variable, size_t derivative_num, bool silent, FILE* file, int precision) {
 
     if (!dfr || !variable) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -921,7 +921,7 @@ Return_code  dfr_calculate_derivative  (Dfr* dfr, const char* variable, size_t d
 
 
     derivative_tree->root = node_calculate_derivative (dfr->derivative_trees_array [derivative_num - 1]->root, variable);
-    tree_fold (derivative_tree, silent, file);
+    tree_fold (derivative_tree, silent, file, precision);
 
 
 
@@ -929,7 +929,7 @@ Return_code  dfr_calculate_derivative  (Dfr* dfr, const char* variable, size_t d
     dfr->derivative_trees_array [derivative_num] = derivative_tree;
 
 
-    if (!silent) tex_write_derivative_ending (file, dfr, variable, derivative_num);
+    if (!silent) tex_write_derivative_ending (file, dfr, variable, derivative_num, precision);
 
 
     return SUCCESS;
@@ -1496,7 +1496,7 @@ Return_code  operation_fold_neutral  (Node* node, bool* folded_anything) {
 //--------------------------------------------------
 
 
-Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
+Return_code  tree_fold  (Tree* tree, bool silent, FILE* file, int precision) {
 
     if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
     if (!silent && !file) { LOG_MESSAGE ("can't write into nullptr file! (specify write file if you didn't)"); silent = true; }
@@ -1505,7 +1505,7 @@ Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
 
     if (!silent) {
 
-        tex_write_tree (file, tree);
+        tex_write_tree (file, tree, precision);
         fprintf (file, "$$\n");
     } 
 
@@ -1524,7 +1524,7 @@ Return_code  tree_fold  (Tree* tree, bool silent, FILE* file) {
         if (!silent && folded_anything_now) {
 
             fprintf (file, "$$ = ");
-            tex_write_tree (file, tree);
+            tex_write_tree (file, tree, precision);
             fprintf (file, "$$\n");
         }
     }
@@ -1784,7 +1784,7 @@ Return_code  dfr_buffer_dtor  (Dfr_buffer* dfr_buffer) {
 }
 
 
-Return_code  tree_evaluate  (Tree* tree, Tree* answer, const char* variable, double value, bool silent, FILE* file) {
+Return_code  tree_evaluate  (Tree* tree, Tree* answer, const char* variable, double value, bool silent, FILE* file, int precision) {
 
     if (!tree || !answer || !variable || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1798,7 +1798,7 @@ Return_code  tree_evaluate  (Tree* tree, Tree* answer, const char* variable, dou
     tree_substitute_variable (answer, variable, value);
 
 
-    try (tree_fold (answer, silent, file));
+    try (tree_fold (answer, silent, file, precision));
 
 
     return SUCCESS;
@@ -1840,7 +1840,7 @@ Return_code  node_substitute_variable  (Node* node, const char* variable, double
 }
 
 
-Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point, size_t depth, bool silent, FILE* file) {
+Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point, size_t depth, bool silent, FILE* file, int precision) {
 
     if (!dfr || !variable ||!isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1855,7 +1855,7 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point
 
 
 
-    if (!silent) tex_write_taylor_introduction (file, depth, variable, point);
+    if (!silent) tex_write_taylor_introduction (file, depth, variable, point, precision);
 
 
     for (size_t i = 0; i <= depth; i++) {
@@ -1864,14 +1864,14 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point
 
 
 
-        if (!silent) tex_write_evaluation_introduction (file, i, point);
+        if (!silent) tex_write_evaluation_introduction (file, i, point, precision);
 
 
         Tree* evaluation_tree = (Tree*) calloc (TREE_SIZE, 1); TREE_CTOR (evaluation_tree);
-        try (tree_evaluate (dfr->derivative_trees_array [i], evaluation_tree, variable, point, silent, file));
+        try (tree_evaluate (dfr->derivative_trees_array [i], evaluation_tree, variable, point, silent, file, precision));
 
 
-        if (!silent) tex_write_evaluation_ending (file, i, point, evaluation_tree);
+        if (!silent) tex_write_evaluation_ending (file, i, point, evaluation_tree, precision);
 
 
 
@@ -1898,7 +1898,7 @@ Return_code  dfr_calculate_taylor  (Dfr* dfr, const char* variable, double point
     }
 
 
-    if (!silent) tex_write_taylor_ending (file, dfr, depth, variable, point);
+    if (!silent) tex_write_taylor_ending (file, dfr, depth, variable, point, precision);
 
 
     return SUCCESS;
@@ -1943,7 +1943,7 @@ double  factorial  (size_t n) {
 }
 
 
-Return_code  tex_write_tree  (FILE* file, Tree* tree) {
+Return_code  tex_write_tree  (FILE* file, Tree* tree, int precision) {
 
     if (!tree || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1955,10 +1955,10 @@ Return_code  tex_write_tree  (FILE* file, Tree* tree) {
     tree_substitute (tree, &substitutions);
 
 
-    tex_write_node (file, tree->root, &substitutions);
+    tex_write_node (file, tree->root, &substitutions, precision);
 
 
-    tex_write_substitutions_decoding (file, &substitutions);
+    tex_write_substitutions_decoding (file, &substitutions, precision);
 
 
     tree_substitution_dtor (&substitutions);
@@ -1968,7 +1968,7 @@ Return_code  tex_write_tree  (FILE* file, Tree* tree) {
 }
 
 
-Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substitutions) {
+Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substitutions, int precision) {
 
     if (!node || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -1989,9 +1989,9 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
 
     switch (node->atom_type) {
 
-        case DAT_CONST:     fprintf (file, "%.1lf", node->element.value.val_double); return SUCCESS;
-        case DAT_VARIABLE:  fprintf (file, "%s",    node->element.value.var_str);    return SUCCESS;
-        case DAT_OPERATION: tex_write_operation (file, node, substitutions);         return SUCCESS;
+        case DAT_CONST:     fprintf (file, "%.*lf", precision, node->element.value.val_double); return SUCCESS;
+        case DAT_VARIABLE:  fprintf (file, "%s",               node->element.value.var_str);    return SUCCESS;
+        case DAT_OPERATION: tex_write_operation (file, node, substitutions, precision);         return SUCCESS;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
@@ -2001,17 +2001,17 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
 //--------------------------------------------------
 #define WRITE_LEFT\
         tex_write_check_open_bracket    (file, node->left_son, node);\
-        tex_write_node                  (file, node->left_son, substitutions);\
+        tex_write_node                  (file, node->left_son, substitutions, precision);\
         tex_write_check_closing_bracket (file, node->left_son, node);
 
 #define WRITE_RIGHT\
         tex_write_check_open_bracket    (file, node, node->right_son);\
-        tex_write_node                  (file, node->right_son, substitutions);\
+        tex_write_node                  (file, node->right_son, substitutions, precision);\
         tex_write_check_closing_bracket (file, node, node->right_son);
 //--------------------------------------------------
 
 
-Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* substitutions) {
+Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* substitutions, int precision) {
 
     if (!node || !file || node->atom_type != DAT_OPERATION) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2042,9 +2042,9 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
         case DOC_DIV:
 
             fprintf (file, "\\frac { ");
-            tex_write_node (file, node-> left_son, substitutions);
+            tex_write_node (file, node-> left_son, substitutions, precision);
             fprintf (file, " } { ");
-            tex_write_node (file, node->right_son, substitutions);
+            tex_write_node (file, node->right_son, substitutions, precision);
             fprintf (file, " }");
             return SUCCESS;
 
@@ -2052,7 +2052,7 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
 
             WRITE_LEFT;
             fprintf (file, "^{");
-            tex_write_node (file, node->right_son, substitutions);
+            tex_write_node (file, node->right_son, substitutions, precision);
             fprintf (file, " }");
             return SUCCESS;
 
@@ -2128,7 +2128,7 @@ Return_code  tex_write_check_closing_bracket  (FILE* file, Node* left, Node* rig
 }
 
 
-Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor_point, size_t depth, double tangent_point, const char* file_name) {
+Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor_point, size_t depth, double tangent_point, int precision, const char* file_name) {
 
     if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2146,11 +2146,11 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor
 
 
     try (tex_write_preamble      (file));
-    try (tex_write_introduction  (file, dfr, variable));
-    try (tex_write_user_function (file, dfr, variable));
-    try (tex_write_derivative    (file, dfr, variable));
-    try (tex_write_taylor        (file, dfr, variable, taylor_point, depth));
-    try (tex_write_graph         (file, dfr, variable, tangent_point));
+    try (tex_write_introduction  (file, dfr, variable,                      precision));
+    try (tex_write_user_function (file, dfr, variable,                      precision));
+    try (tex_write_derivative    (file, dfr, variable,                      precision));
+    try (tex_write_taylor        (file, dfr, variable, taylor_point, depth, precision));
+    try (tex_write_graph         (file, dfr, variable, tangent_point,       precision));
     try (tex_write_end           (file));
 
 
@@ -2225,7 +2225,7 @@ const char*  tex_get_phrase  (void) {
 }
 
 
-Return_code  tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable) {
+Return_code  tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable, int precision) {
 
     if (!dfr || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2236,7 +2236,7 @@ Return_code  tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable
 
     fprintf (file, "$$");
     fprintf (file, "%s(%s) = ", USER_FUNCTION_NAME, variable);
-    tex_write_tree (file, dfr->user_function_tree);
+    tex_write_tree (file, dfr->user_function_tree, precision);
     fprintf (file, "$$\n\n");
 
 
@@ -2244,7 +2244,7 @@ Return_code  tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable
 }
 
 
-Return_code  tex_write_derivative  (FILE* file, Dfr* dfr, const char* variable) {
+Return_code  tex_write_derivative  (FILE* file, Dfr* dfr, const char* variable, int precision) {
 
     if (!dfr || !variable || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2252,7 +2252,7 @@ Return_code  tex_write_derivative  (FILE* file, Dfr* dfr, const char* variable) 
     fprintf (file, "\\section {Поиск производной}\n");
 
 
-    dfr_calculate_derivative (dfr, variable, 1, false, file);
+    dfr_calculate_derivative (dfr, variable, 1, false, file, precision);
 
 
     return SUCCESS;
@@ -2291,26 +2291,26 @@ Return_code  tex_write_function_name  (FILE* file, size_t derivative_num) {
 }
 
 
-Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, double point, size_t depth) {
+Return_code  tex_write_taylor  (FILE* file, Dfr* dfr, const char* variable, double point, size_t depth, int precision) {
 
     if (!file || !dfr || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    try (dfr_calculate_taylor (dfr, variable, point, depth, false, file));
+    try (dfr_calculate_taylor (dfr, variable, point, depth, false, file, precision));
 
 
     return SUCCESS;
 }
 
 
-Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_num, double value) {
+Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_num, double value, int precision) {
 
     if (!file || !isfinite (value)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\\subsection {давайте найдем $");
     tex_write_function_name (file, derivative_num);
-    fprintf (file, "(%.1lf)$}\n", value);
+    fprintf (file, "(%.*lf)$}\n", precision, value);
 
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "%s\n", tex_get_phrase ());
@@ -2318,14 +2318,14 @@ Return_code  tex_write_evaluation_introduction  (FILE* file, size_t derivative_n
 
     fprintf (file, "\n$$");
     tex_write_function_name (file, derivative_num);
-    fprintf (file, "(%.1lf) = ", value);
+    fprintf (file, "(%.*lf) = ", precision, value);
 
 
     return SUCCESS;
 }
 
 
-Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, double value, Tree* answer) {
+Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, double value, Tree* answer, int precision) {
 
     if (!file || !isfinite (value) || !answer) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2336,8 +2336,8 @@ Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, do
     fprintf (file, "\\end {flushleft}\n\n");
     fprintf (file, "$$");
     tex_write_function_name (file, derivative_num);
-    fprintf (file, "(%.1lf) = ", value);
-    tex_write_tree (file, answer);
+    fprintf (file, "(%.*lf) = ", precision, value);
+    tex_write_tree (file, answer, precision);
     fprintf (file, "$$\n\n");
 
 
@@ -2345,7 +2345,7 @@ Return_code  tex_write_evaluation_ending  (FILE* file, size_t derivative_num, do
 }
 
 
-Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const char* variable, double point) {
+Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const char* variable, double point, int precision) {
 
     if (!file || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2354,7 +2354,7 @@ Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const cha
     fprintf (file, "\\begin {flushleft}\n");
     fprintf (file, "давайте найдем разложение в ряд тейлора функции $");
     tex_write_function_name (file, 0);
-    fprintf (file, "(%s)$ в точке %.1lf до o($(%s - %.1lf)^%zd$)\n", variable, point, variable, point, depth);
+    fprintf (file, "(%s)$ в точке %.*lf до o($(%s - %.*lf)^%zd$)\n", variable, precision, point, variable, precision, point, depth);
     fprintf (file, "\\end {flushleft}\n\n");
 
 
@@ -2362,32 +2362,33 @@ Return_code  tex_write_taylor_introduction  (FILE* file, size_t depth, const cha
 }
 
 
-Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const char* variable, double point) {
+Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const char* variable, double point, int precision) {
 
     if (!dfr || !file || !variable || !isfinite (point) || !dfr->taylor) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     fprintf (file, "\\begin {flushleft}\n");
-    fprintf (file, "разложение функции %s(%s) в ряд тейлора в точке %.1lf: \n", USER_FUNCTION_NAME, variable, point);
-    fprintf (file, "\\end {flushleft}\n");
-    fprintf (file, "\n\n$$");
+    fprintf (file, "разложение функции %s(%s) в ряд тейлора в точке %.*lf: \n", USER_FUNCTION_NAME, variable, precision, point);
+    fprintf (file, "\\end {flushleft}\n\n");
 
 
-    tex_write_tree (file, dfr->taylor [0]);
+    fprintf (file, "$$");
+    tex_write_tree (file, dfr->taylor [0], precision);
+    fprintf (file, "$$");
 
     for (size_t i = 1; i <= depth; i++) {
 
-        fprintf (file, " + (");
-        try (tex_write_tree (file, dfr->taylor [i]));
-        fprintf (file, ") * (%s - %.1lf)^%zd", variable, point, i);
+        fprintf (file, "$$ + (");
+        try (tex_write_tree (file, dfr->taylor [i], precision));
+        fprintf (file, ") * (%s - %.*lf)^%zd$$", variable, precision, point, i);
 
     }
 
 
-    fprintf (file, " + o((%s - %.1lf)^%zd)", variable, point, depth);
+    fprintf (file, "$$ + o((%s - %.*lf)^%zd)$$", variable, precision, point, depth);
 
 
-    fprintf (file, "$$\n\n");
+    fprintf (file, "\n\n");
 
 
     return SUCCESS;
@@ -2415,7 +2416,7 @@ Return_code  tex_write_derivative_introduction  (FILE* file, const char* variabl
 }
 
 
-Return_code  tex_write_derivative_ending  (FILE* file, Dfr* dfr, const char* variable, size_t derivative_num) {
+Return_code  tex_write_derivative_ending  (FILE* file, Dfr* dfr, const char* variable, size_t derivative_num, int precision) {
 
     if (!dfr || !file || !variable || !dfr->derivative_trees_array [derivative_num]) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2427,7 +2428,7 @@ Return_code  tex_write_derivative_ending  (FILE* file, Dfr* dfr, const char* var
     fprintf (file, "$$");
     tex_write_function_name (file, derivative_num);
     fprintf (file, "(%s) = ", variable);
-    tex_write_tree (file, dfr->derivative_trees_array [derivative_num]);
+    tex_write_tree (file, dfr->derivative_trees_array [derivative_num], precision);
     fprintf (file, "$$\n\n");
 
 
@@ -2435,7 +2436,7 @@ Return_code  tex_write_derivative_ending  (FILE* file, Dfr* dfr, const char* var
 }
 
 
-Return_code  tex_write_user_function  (FILE* file, Dfr* dfr, const char* variable) {
+Return_code  tex_write_user_function  (FILE* file, Dfr* dfr, const char* variable, int precision) {
 
     if (!file || !dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2450,8 +2451,8 @@ Return_code  tex_write_user_function  (FILE* file, Dfr* dfr, const char* variabl
 
 
     tex_write_user_function_introduction (file, variable);
-    try (tree_fold                       (dfr->derivative_trees_array [0], false, file));
-    tex_write_user_function_ending       (file, dfr, variable);
+    try (tree_fold                       (dfr->derivative_trees_array [0], false, file, precision));
+    tex_write_user_function_ending       (file, dfr, variable, precision);
 
 
 
@@ -2474,7 +2475,7 @@ Return_code  tex_write_user_function_introduction (FILE* file, const char* varia
 } 
 
 
-Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* variable) {
+Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* variable, int precision) {
 
     if (!file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2482,7 +2483,7 @@ Return_code  tex_write_user_function_ending  (FILE* file, Dfr* dfr, const char* 
     fprintf (file, "\nитак, \n$$");
     tex_write_function_name (file, 0);
     fprintf (file, "(%s) = ", variable);
-    tex_write_tree (file, dfr->derivative_trees_array [0]);
+    tex_write_tree (file, dfr->derivative_trees_array [0], precision);
     fprintf (file, "$$\n\n");
 
 
@@ -2928,7 +2929,7 @@ Return_code  tex_write_substitution_index  (FILE* file, Node_substitution* subst
 }
 
 
-Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* substitutions) {
+Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* substitutions, int precision) {
 
     if (!file || !substitutions) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2943,7 +2944,7 @@ Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* su
 
     for (size_t i = 0; i < substitutions->num_substitutions; i++) {
 
-        tex_write_substitution_decoding (file, substitutions, i);
+        tex_write_substitution_decoding (file, substitutions, i, precision);
     }
 
 
@@ -2955,7 +2956,7 @@ Return_code  tex_write_substitutions_decoding (FILE* file, Tree_substitution* su
 }
 
 
-Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* substitutions, size_t index) {
+Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* substitutions, size_t index, int precision) {
 
     if (!file || !substitutions || !substitutions->substitution_list [index].node) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2968,7 +2969,7 @@ Return_code  tex_write_substitution_decoding  (FILE* file, Tree_substitution* su
     Node_substitution this_substitution = substitutions->substitution_list [index]; //чтобы функция печатания не увидила тривиальной замены на эту же букву
     substitutions->substitution_list [index] = { nullptr, 0 };
 
-    tex_write_node (file, this_substitution.node, substitutions);
+    tex_write_node (file, this_substitution.node, substitutions, precision);
 
     substitutions->substitution_list [index] = this_substitution;
 
@@ -3078,7 +3079,7 @@ bool  sons_the_same  (Node* node1, Node* node2, bool is_symmetric_operation) {
 }
 
 
-Return_code  dfr_generate_gnu_plot_describtion  (Dfr* dfr, const char* variable, const char* file_name) {
+Return_code  dfr_generate_gnu_plot_describtion  (Dfr* dfr, const char* variable, int precision, const char* file_name) {
 
     if (!dfr || !file_name) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -3097,15 +3098,15 @@ Return_code  dfr_generate_gnu_plot_describtion  (Dfr* dfr, const char* variable,
 
     fprintf (file, "set title  \"%s(%s) = ", USER_FUNCTION_NAME, variable);
     fclose (file);
-    write_function      (dfr->user_function_tree, file_name, "a");
+    write_function      (dfr->user_function_tree, precision, file_name, "a");
     write_text_function (file_name, "%s", "\"\n");
 
     write_text_function (file_name, "%s", "plot ");
 
 
-    write_function      (dfr->user_function_tree, file_name, "a");
+    write_function      (dfr->user_function_tree, precision, file_name, "a");
     write_text_function (file_name, "%s", ", ");
-    write_function      (dfr->tangent, file_name, "a");
+    write_function      (dfr->tangent, precision, file_name, "a");
 
 
     return SUCCESS;
@@ -3146,13 +3147,13 @@ Return_code  dfr_calculate_tangent  (Dfr* dfr, const char* variable, double poin
 }
 
 
-Return_code  dfr_generate_graph  (Dfr* dfr, const char* variable, double point) {
+Return_code  dfr_generate_graph  (Dfr* dfr, const char* variable, double point, int precision) {
 
     if (!dfr || !variable || !isfinite (point)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
     try (dfr_calculate_tangent (dfr, variable, point));
-    try (dfr_generate_gnu_plot_describtion (dfr, variable));
+    try (dfr_generate_gnu_plot_describtion (dfr, variable, precision));
 
 
     char system_call [MAX_COMMAND_LEN] = "gnuplot ";
@@ -3165,12 +3166,12 @@ Return_code  dfr_generate_graph  (Dfr* dfr, const char* variable, double point) 
 }
 
 
-Return_code  tex_write_graph  (FILE* file, Dfr* dfr, const char* variable, double point) {
+Return_code  tex_write_graph  (FILE* file, Dfr* dfr, const char* variable, double point, int precision) {
 
     if (!file || !dfr || !variable || !isfinite (point) ) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    try (dfr_generate_graph (dfr, variable, point));
+    try (dfr_generate_graph (dfr, variable, point, precision));
 
 
     fprintf (file, "\\section {график функции}\n");
