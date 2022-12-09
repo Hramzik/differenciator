@@ -852,6 +852,9 @@ Return_code  write_function_check_open_bracket  (FILE* file, Tree_iterator* tree
     else                               { son = tree_iterator->current->right_son; }
 
 
+    //if ( is_unary_minus (son)) { fprintf (file, "("); return SUCCESS; }
+
+
     if (tree_iterator->current->atom_type == DAT_OPERATION && son->atom_type == DAT_OPERATION &&
         !are_associative (tree_iterator->current->element.value.val_operation_code, son->element.value.val_operation_code)) {
 
@@ -874,8 +877,8 @@ Return_code  write_function_check_closing_bracket  (FILE* file, Tree_iterator* t
                            stack_push (tree_iterator->node_stack, son);
 
 
-    if ( is_unary (parent)) { fprintf (file, ")"); return SUCCESS; }
-
+    if ( is_unary       (parent)) { fprintf (file, ")"); return SUCCESS; }
+    //if ( is_unary_minus (son))    { fprintf (file, ")"); return SUCCESS; }
 
 
     if (son->atom_type == DAT_OPERATION && parent->atom_type == DAT_OPERATION &&
@@ -1498,7 +1501,7 @@ Return_code  operation_fold_neutral  (Node* node, bool* folded_anything) {
 
 Return_code  tree_fold  (Tree* tree, bool silent, FILE* file, int precision) {
 
-    if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+    if (!tree)            { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
     if (!silent && !file) { LOG_MESSAGE ("can't write into nullptr file! (specify write file if you didn't)"); silent = true; }
 
 
@@ -1950,15 +1953,17 @@ Return_code  tex_write_tree  (FILE* file, Tree* tree, int precision) {
 
     Tree_substitution substitutions = {};
     tree_substitution_ctor (&substitutions);
+    //fprintf (file, " |debug-1| ");
 
 
-    tree_substitute (tree, &substitutions);
+    tree_substitute (tree, &substitutions);// fprintf (file, " |debug0| ");
+    printf ("TOTAL SUBS: %zd\n", substitutions.num_substitutions);
 
 
-    tex_write_node (file, tree->root, &substitutions, precision);
+    tex_write_node (file, tree->root, &substitutions, precision);// fprintf (file, " |debug1| ");
 
 
-    tex_write_substitutions_decoding (file, &substitutions, precision);
+    tex_write_substitutions_decoding (file, &substitutions, precision);// fprintf (file, " |debug2| ");
 
 
     tree_substitution_dtor (&substitutions);
@@ -1989,9 +1994,9 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
 
     switch (node->atom_type) {
 
-        case DAT_CONST:     fprintf (file, "%.*lf", precision, node->element.value.val_double); return SUCCESS;
-        case DAT_VARIABLE:  fprintf (file, "%s",               node->element.value.var_str);    return SUCCESS;
-        case DAT_OPERATION: tex_write_operation (file, node, substitutions, precision);         return SUCCESS;
+        case DAT_CONST:     tex_write_const     (file, node,                precision); return SUCCESS;
+        case DAT_VARIABLE:  fprintf (file, "%s", node->element.value.var_str);          return SUCCESS;
+        case DAT_OPERATION: tex_write_operation (file, node, substitutions, precision); return SUCCESS;
 
         default: LOG_ERROR (BAD_ARGS); return BAD_ARGS;
     }
@@ -2026,6 +2031,15 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
             return SUCCESS;
 
         case DOC_SUB:
+
+            if (is_unary_minus (node)) {
+
+                fprintf (file, "-");
+                tex_write_node (file, node->right_son, substitutions, precision);
+                //fprintf (file, "");
+                return SUCCESS;
+            }
+
 
             WRITE_LEFT;
             fprintf (file, " - ");
@@ -2098,6 +2112,24 @@ Return_code  tex_write_operation  (FILE* file, Node* node, Tree_substitution* su
 //--------------------------------------------------
 
 
+Return_code  tex_write_const  (FILE* file, Node* node, int precision) {
+
+    if (!file || !node || (node->atom_type != DAT_CONST)) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    if (node->element.value.val_double < 0) fprintf (file, "(");
+
+
+    fprintf (file, "%.*lf", precision, node->element.value.val_double);
+
+
+    if (node->element.value.val_double < 0) fprintf (file, ")");
+
+
+    return SUCCESS;
+}
+
+
 Return_code  tex_write_check_open_bracket  (FILE* file, Node* left, Node* right) {
 
     if (!left || !right || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
@@ -2139,6 +2171,11 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor
         LOG_ERROR (BAD_ARGS);
         return BAD_ARGS;
     }
+
+
+    if (precision > 6) precision = 6;
+
+
 
 
     FILE* file = fopen (file_name, "w");
@@ -2378,9 +2415,9 @@ Return_code  tex_write_taylor_ending  (FILE* file, Dfr* dfr, size_t depth, const
 
     for (size_t i = 1; i <= depth; i++) {
 
-        fprintf (file, "$$ + (");
+        fprintf (file, "$$ + ");
         try (tex_write_tree (file, dfr->taylor [i], precision));
-        fprintf (file, ") * (%s - %.*lf)^%zd$$", variable, precision, point, i);
+        fprintf (file, " \\cdot (%s - %.*lf)^%zd$$", variable, precision, point, i);
 
     }
 
@@ -2653,7 +2690,7 @@ Return_code  tree_substitute  (Tree* tree, Tree_substitution* tree_substitution)
 
     if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
-
+    printf ("NEW_SUBSTITUITON BEGINS\n");
     node_substitute (tree->root, tree_substitution, 1);
 
 
@@ -2719,6 +2756,7 @@ Return_code  node_substitute  (Node* node, Tree_substitution* tree_substitution,
 
     if (node->atom_type != DAT_OPERATION) return SUCCESS; //can't substitute if node has no sons!
 
+    //printf ("node sub\n");
 
     node_substitute_left  (node, tree_substitution, cur_len_coefficient);
     node_substitute_right (node, tree_substitution, cur_len_coefficient);
@@ -2751,7 +2789,7 @@ Return_code  node_substitute_left  (Node* node, Tree_substitution* tree_substitu
     if (len_left < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
 
 
-    tree_add_substitution (tree_substitution, node->left_son);
+    tree_add_substitution (tree_substitution, node->left_son); printf ("plus sub\n");
 
 
     return SUCCESS;
@@ -3280,5 +3318,19 @@ bool  is_unary  (Node* node) {
 
 
     return true;
+}
+
+bool  is_unary_minus  (Node* node) {
+
+    if (!node) { LOG_ERROR (BAD_ARGS); return false; }
+
+
+    if (node->atom_type != DAT_OPERATION) return false;
+
+
+    if ((node->OP == DOC_SUB) && (LEFT->atom_type == DAT_CONST && double_equal (LEFT->CONST, 0))) return true;
+
+
+    return false;
 }
 

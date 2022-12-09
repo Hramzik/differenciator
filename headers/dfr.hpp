@@ -186,8 +186,8 @@ typedef struct Tree_substitution {
 const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at least function and 1st derivative
 const size_t MAX_PREAMBLE_LEN   = ceil (log (MAX_TAYLOR_DEPTH) / log (10)) + strlen ("'th derivative:        ");
 const size_t MAX_PHRASE_LEN     = 100;
-const size_t MAX_SUBSTITUTIONS  = 1000;
-const size_t MAX_TEX_LEN        = 50;
+const size_t MAX_SUBSTITUTIONS  = 400;
+const size_t MAX_TEX_LEN        = 40;
 const size_t ALPHABET_LEN       = 24;
 //--------------------------------------------------
 
@@ -225,6 +225,8 @@ Return_code read_general  (Dfr_buffer* dfr_buffer, Tree* tree);
 bool is_variable_start (char simbol);
 bool is_variable_mid   (char simbol);
 bool is_unary          (Node* node);
+bool is_unary_minus    (Node* node);
+
 
 Return_code dfr_read_user_function             (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
 
@@ -246,6 +248,7 @@ Return_code write_function_check_closing_bracket (FILE* file, Tree_iterator* tre
 Return_code tex_write_tree      (FILE* file, Tree* tree, int precitsion);
 Return_code tex_write_node      (FILE* file, Node* node, Tree_substitution* substitutions, int precision);
 Return_code tex_write_operation (FILE* file, Node* node, Tree_substitution* substitutions, int precision);
+Return_code tex_write_const     (FILE* file, Node* node,                                   int precision);
 Return_code tex_write_check_open_bracket    (FILE* file, Node* left, Node* right);
 Return_code tex_write_check_closing_bracket (FILE* file, Node* left, Node* right);
 

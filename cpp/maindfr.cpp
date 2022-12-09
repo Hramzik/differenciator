@@ -14,11 +14,12 @@ int main (void) {
 
     bool INTERACTIVE_MODE = false;
 
-    char  variable [MAX_VARIABLE_LEN] = "x";
-    double taylor_point               = 1;
-    size_t depth                      = 8;
-    double tangent_point              = 1;
-    int precision                     = 6;
+    char   variable [MAX_VARIABLE_LEN] = "x";
+    double taylor_point                = 1;
+    size_t depth                       = 8;
+    double tangent_point               = 1;
+    int    precision                   = 6;
+    bool   dumping                     = false;
 
 
     if (INTERACTIVE_MODE) {
@@ -40,12 +41,15 @@ int main (void) {
     printf ("reader        return code - %d\n", return_code); 
     if (return_code) { dfr_sorry_message; return 0; }
 
-    //FTREE_GRAPHDUMP (dfr.user_function_tree);
+    if (dumping) { FTREE_GRAPHDUMP (dfr.user_function_tree); }
 
 
     return_code = tex_generate_output    (&dfr, variable, taylor_point, depth, tangent_point, precision);
     printf ("tex generator return code - %d\n", return_code);
     if (return_code) { dfr_sorry_message; return 0; }
+
+
+    if (dumping) { FTREE_GRAPHDUMP (dfr.derivative_trees_array [0]); }
 
 
     /*printf ("pdf generator return code - %d\n", tex_generate_pdf ());*/
