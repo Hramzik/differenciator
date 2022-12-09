@@ -187,7 +187,7 @@ const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at
 const size_t MAX_PREAMBLE_LEN   = ceil (log (MAX_TAYLOR_DEPTH) / log (10)) + strlen ("'th derivative:        ");
 const size_t MAX_PHRASE_LEN     = 100;
 const size_t MAX_SUBSTITUTIONS  = 400;
-const size_t MAX_TEX_LEN        = 60;
+const size_t MAX_TEX_LEN        = 80;
 const size_t ALPHABET_LEN       = 24;
 //--------------------------------------------------
 
@@ -249,8 +249,8 @@ Return_code tex_write_tree      (FILE* file, Tree* tree, int precitsion);
 Return_code tex_write_node      (FILE* file, Node* node, Tree_substitution* substitutions, int precision);
 Return_code tex_write_operation (FILE* file, Node* node, Tree_substitution* substitutions, int precision);
 Return_code tex_write_const     (FILE* file, Node* node,                                   int precision);
-Return_code tex_write_check_open_bracket    (FILE* file, Node* left, Node* right);
-Return_code tex_write_check_closing_bracket (FILE* file, Node* left, Node* right);
+Return_code tex_write_check_open_bracket    (FILE* file, Node* left, Node* right, Tree_substitution* substitutions);
+Return_code tex_write_check_closing_bracket (FILE* file, Node* left, Node* right, Tree_substitution* substitutions);
 
 Return_code tex_write_evaluation_introduction    (FILE* file, size_t derivative_num, double value, int precision);
 Return_code tex_write_evaluation_ending          (FILE* file, size_t derivative_num, double value, Tree* answer, int precision);

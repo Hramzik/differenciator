@@ -1953,17 +1953,16 @@ Return_code  tex_write_tree  (FILE* file, Tree* tree, int precision) {
 
     Tree_substitution substitutions = {};
     tree_substitution_ctor (&substitutions);
-    //fprintf (file, " |debug-1| ");
 
 
-    tree_substitute (tree, &substitutions, precision);// fprintf (file, " |debug0| ");
-    printf ("TOTAL SUBS: %zd\n", substitutions.num_substitutions);
+    tree_substitute (tree, &substitutions, precision);
+    //printf ("TOTAL SUBS: %zd\n", substitutions.num_substitutions);
 
 
-    tex_write_node (file, tree->root, &substitutions, precision);// fprintf (file, " |debug1| ");
+    tex_write_node (file, tree->root, &substitutions, precision);
 
 
-    tex_write_substitutions_decoding (file, &substitutions, precision);// fprintf (file, " |debug2| ");
+    tex_write_substitutions_decoding (file, &substitutions, precision);
 
 
     tree_substitution_dtor (&substitutions);
@@ -2005,14 +2004,14 @@ Return_code  tex_write_node  (FILE* file, Node* node, Tree_substitution* substit
 
 //--------------------------------------------------
 #define WRITE_LEFT\
-        tex_write_check_open_bracket    (file, node->left_son, node);\
-        tex_write_node                  (file, node->left_son, substitutions, precision);\
-        tex_write_check_closing_bracket (file, node->left_son, node);
+        tex_write_check_open_bracket    (file, node->left_son, node, substitutions);\
+        tex_write_node                  (file, node->left_son,       substitutions, precision);\
+        tex_write_check_closing_bracket (file, node->left_son, node, substitutions);
 
 #define WRITE_RIGHT\
-        tex_write_check_open_bracket    (file, node, node->right_son);\
-        tex_write_node                  (file, node->right_son, substitutions, precision);\
-        tex_write_check_closing_bracket (file, node, node->right_son);
+        tex_write_check_open_bracket    (file, node->right_son, node, substitutions);\
+        tex_write_node                  (file, node->right_son,       substitutions, precision);\
+        tex_write_check_closing_bracket (file, node->right_son, node, substitutions);
 //--------------------------------------------------
 
 
@@ -2130,30 +2129,38 @@ Return_code  tex_write_const  (FILE* file, Node* node, int precision) {
 }
 
 
-Return_code  tex_write_check_open_bracket  (FILE* file, Node* left, Node* right) {
+Return_code  tex_write_check_open_bracket  (FILE* file, Node* son, Node* parent, Tree_substitution* substitutions) {
 
-    if (!left || !right || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    if (left->atom_type != DAT_OPERATION || right->atom_type != DAT_OPERATION) return SUCCESS;
+    if (!son || !parent || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (!are_associative (left->element.value.val_operation_code, right->element.value.val_operation_code)) fprintf (file, "( ");
+    if (son->atom_type != DAT_OPERATION || parent->atom_type != DAT_OPERATION) return SUCCESS;
+
+
+    if (get_tex_substitution (substitutions, son) || get_tex_substitution (substitutions, parent)) return SUCCESS;
+
+
+
+    if (!are_associative (parent->element.value.val_operation_code, son->element.value.val_operation_code)) fprintf (file, "( ");
 
 
     return SUCCESS;
 }
 
 
-Return_code  tex_write_check_closing_bracket  (FILE* file, Node* left, Node* right) {
+Return_code  tex_write_check_closing_bracket  (FILE* file, Node* son, Node* parent, Tree_substitution* substitutions) {
 
-    if (!left || !right || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
-
-
-    if (left->atom_type != DAT_OPERATION || right->atom_type != DAT_OPERATION) return SUCCESS;
+    if (!son || !parent || !file) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
 
-    if (!are_associative (left->element.value.val_operation_code, right->element.value.val_operation_code)) fprintf (file, " )");
+    if (son->atom_type != DAT_OPERATION || parent->atom_type != DAT_OPERATION) return SUCCESS;
+
+
+    if (get_tex_substitution (substitutions, son) || get_tex_substitution (substitutions, parent)) return SUCCESS;
+
+
+
+    if (!are_associative (parent->element.value.val_operation_code, son->element.value.val_operation_code)) fprintf (file, " )");
 
 
     return SUCCESS;
@@ -2538,7 +2545,7 @@ Return_code  node_get_tex_len  (Node* node, double* len_ptr, double len_coeffici
 
         double substitution_len = get_tex_substitution_len (substitution_list, node);
 
-        if (!!isfinite (substitution_len)) {
+        if (isfinite (substitution_len)) {
 
             *len_ptr += len_coefficient * substitution_len;
             return SUCCESS;
@@ -2610,21 +2617,21 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
         case DOC_ADD:
 
             try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions, precision));
-            *len_ptr += len_coefficient * 1; //for +
+            *len_ptr += len_coefficient * 2; //for +
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_SUB:
 
             try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions, precision));
-            *len_ptr += len_coefficient * 1; //for -
+            *len_ptr += len_coefficient * 2; //for -
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_MULT:
 
             try (node_get_tex_len (node-> left_son, len_ptr, len_coefficient, substitutions, precision));
-            *len_ptr += len_coefficient * 1; //for \cdot
+            *len_ptr += len_coefficient * 2; //for \cdot
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
@@ -2651,31 +2658,31 @@ Return_code  operation_get_tex_len  (Node* node, double* len_ptr, double len_coe
 
         case DOC_LN:
 
-            *len_ptr += len_coefficient * 2; //for ln
+            *len_ptr += len_coefficient * 3; //for ln
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_SIN:
 
-            *len_ptr += len_coefficient * 3; //for sin
+            *len_ptr += len_coefficient * 4; //for sin
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_COS:
 
-            *len_ptr += len_coefficient * 3; //for cos
+            *len_ptr += len_coefficient * 4; //for cos
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_TG:
 
-            *len_ptr += len_coefficient * 2; //for tg
+            *len_ptr += len_coefficient * 3; //for tg
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
         case DOC_CTG:
 
-            *len_ptr += len_coefficient * 3; //for ctg
+            *len_ptr += len_coefficient * 4; //for ctg
             try (node_get_tex_len (node->right_son, len_ptr, len_coefficient, substitutions, precision));
             return SUCCESS;
 
@@ -2690,7 +2697,8 @@ Return_code  tree_substitute  (Tree* tree, Tree_substitution* tree_substitution,
 
     if (!tree) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
-    printf ("NEW_SUBSTITUITON BEGINS\n");
+
+    //printf ("NEW_SUBSTITUITON BEGINS\n");
     node_substitute (tree->root, tree_substitution, 1, precision);
 
 
@@ -2732,16 +2740,16 @@ double  get_operation_tex_len  (Operation_code operation_code, double len_coeffi
 
     switch (operation_code) {
 
-        case DOC_ADD:  return len_coefficient * 1;
-        case DOC_SUB:  return len_coefficient * 1;
-        case DOC_MULT: return len_coefficient * 1;
+        case DOC_ADD:  return len_coefficient * 2;
+        case DOC_SUB:  return len_coefficient * 2;
+        case DOC_MULT: return len_coefficient * 2;
         case DOC_DIV:  return 0;
         case DOC_POW:  return 0;
-        case DOC_LN:   return len_coefficient * 2;
-        case DOC_SIN:  return len_coefficient * 3;
-        case DOC_COS:  return len_coefficient * 3;
-        case DOC_TG:   return len_coefficient * 2;
-        case DOC_CTG:  return len_coefficient * 3;
+        case DOC_LN:   return len_coefficient * 3;
+        case DOC_SIN:  return len_coefficient * 4;
+        case DOC_COS:  return len_coefficient * 4;
+        case DOC_TG:   return len_coefficient * 3;
+        case DOC_CTG:  return len_coefficient * 4;
 
         case DOC_UNKNOWN: LOG_ERROR (BAD_ARGS); return NAN;
         default:          LOG_ERROR (BAD_ARGS); return NAN;
@@ -2760,6 +2768,14 @@ Return_code  node_substitute  (Node* node, Tree_substitution* tree_substitution,
 
     node_substitute_left  (node, tree_substitution, cur_len_coefficient, precision);
     node_substitute_right (node, tree_substitution, cur_len_coefficient, precision);
+
+    /*double test = 0;
+    node_get_tex_len (node,            &test,  cur_len_coefficient, tree_substitution, precision);
+    double testl = 0;
+    node_get_tex_len (node-> left_son, &testl, cur_len_coefficient, tree_substitution, precision);
+    double testr = 0;
+    node_get_tex_len (node->right_son, &testr, cur_len_coefficient, tree_substitution, precision);
+    if (test > 10) { printf ("%lf = %lf + %lf\n", test, testl, testr); }*/
 
 
     return SUCCESS;
@@ -2789,7 +2805,7 @@ Return_code  node_substitute_left  (Node* node, Tree_substitution* tree_substitu
     if (len_left < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
 
 
-    tree_add_substitution (tree_substitution, node->left_son); printf ("plus sub\n");
+    tree_add_substitution (tree_substitution, node->left_son); //printf ("plus sub\n");
 
 
     return SUCCESS;
@@ -2815,7 +2831,7 @@ Return_code  node_substitute_right  (Node* node, Tree_substitution* tree_substit
 
 
     len_right = 0;
-    node_get_tex_len (node->left_son, &len_right, cur_len_coefficient, tree_substitution, precision);
+    node_get_tex_len (node->right_son, &len_right, cur_len_coefficient, tree_substitution, precision);
     if (len_right < (MAX_TEX_LEN - get_operation_tex_len (node->element.value.val_operation_code, cur_len_coefficient)) / 3) return SUCCESS;
 
 
