@@ -187,7 +187,7 @@ const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at
 const size_t MAX_PREAMBLE_LEN   = ceil (log (MAX_TAYLOR_DEPTH) / log (10)) + strlen ("'th derivative:        ");
 const size_t MAX_PHRASE_LEN     = 100;
 const size_t MAX_SUBSTITUTIONS  = 400;
-const size_t MAX_TEX_LEN        = 40;
+const size_t MAX_TEX_LEN        = 60;
 const size_t ALPHABET_LEN       = 24;
 //--------------------------------------------------
 
@@ -274,11 +274,11 @@ Return_code tex_write_derivative    (FILE* file, Dfr* dfr, const char* variable,
 Return_code tex_write_taylor        (FILE* file, Dfr* dfr, const char* variable, double point, size_t depth, int precision);
 
 
-Return_code node_get_tex_len      (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitution_list);
-Return_code double_get_tex_len    (double value, double* len_ptr, double len_coefficient);
+Return_code node_get_tex_len      (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitution_list, int precision);
+Return_code double_get_tex_len    (double value, double* len_ptr, double len_coefficient, int precision);
 size_t      size_t_get_tex_len    (size_t value);
 Return_code variable_get_tex_len  (const char* variable, double* len_ptr, double len_coefficient);
-Return_code operation_get_tex_len (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitutions);
+Return_code operation_get_tex_len (Node* node, double* len_ptr, double len_coefficient, Tree_substitution* substitutions, int precision);
 double      get_operation_tex_len (Operation_code operation_code, double len_coefficient);
 
 
@@ -322,10 +322,10 @@ Return_code  skipspaces            (char** str_ptr);
 
 Return_code        tree_substitution_ctor           (Tree_substitution* tree_substitution);
 Return_code        tree_substitution_dtor           (Tree_substitution* tree_substitution);
-Return_code        tree_substitute                  (Tree* tree, Tree_substitution* tree_substitution);
-Return_code        node_substitute                  (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient);
-Return_code        node_substitute_left             (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient);
-Return_code        node_substitute_right            (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient);
+Return_code        tree_substitute                  (Tree* tree, Tree_substitution* tree_substitution,                             int precision);
+Return_code        node_substitute                  (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient, int precision);
+Return_code        node_substitute_left             (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient, int precision);
+Return_code        node_substitute_right            (Node* node, Tree_substitution* tree_substitution, double cur_len_coefficient, int precision);
 Return_code        tree_add_substitution            (Tree_substitution* tree_substitution, Node* node);
 double             get_tex_substitution_len         (Tree_substitution* substitution_list, Node* node);
 double             get_substitution_letter_len      (size_t substitution_number);

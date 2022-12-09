@@ -16,7 +16,7 @@ int main (void) {
 
     char   variable [MAX_VARIABLE_LEN] = "x";
     double taylor_point                = 1;
-    size_t depth                       = 8;
+    size_t depth                       = 5;
     double tangent_point               = 1;
     int    precision                   = 6;
     bool   dumping                     = false;
