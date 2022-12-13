@@ -30,7 +30,7 @@
 #define ON_DFR_ERROR_DUMPING
 #define ON_DFR_AFTER_OPERATION_DUMPIN
 
-#define dfr_default_input_file_name        "work/test.txt"
+#define dfr_default_input_file_name        "work/user_function.txt"
 #define dfr_default_output_file_name       "work/answer.txt"
 #define dfr_default_tex_file_name          "work/texoutput.tex"
 #define dfr_default_dump_file_name         "work/dfr_dump.html"
@@ -129,6 +129,17 @@ enum Buffer_operation_code {
 };
 
 
+enum Dfr_field {
+
+    DFRF_UNKNOWN = 0,
+    DFRF_VARIABLE = 1,
+    DFRF_PRECISION = 2,
+    DFRF_FUNCTION = 3,
+    DFRF_TAYLOR_POINT = 4,
+    DFRF_DEPTH = 5,
+    DFRF_TANGENT_POINT = 6,
+};
+
 typedef struct Buffer_node {
 
     Atom_type atom_type;
@@ -181,6 +192,17 @@ typedef struct Tree_substitution {
 } Tree_substitution; const size_t TREE_SUBSTITUTION_SIZE = sizeof (Tree_substitution);
 
 
+typedef struct Dfr_settings {
+
+    char* variable;
+    int         precision;
+    char* function;
+    double      taylor_point;
+    size_t      depth;
+    double      tangent_point;
+
+} Dfr_settings; const size_t DFR_SETTINGS_SIZE = sizeof (Dfr_settings);
+
 
 //--------------------------------------------------
 const size_t MAX_DERIVATIVE_NUM = fmax (MAX_TAYLOR_DEPTH, 1) + 1; //place for at least function and 1st derivative
@@ -189,6 +211,8 @@ const size_t MAX_PHRASE_LEN     = 100;
 const size_t MAX_SUBSTITUTIONS  = 400;
 const size_t MAX_TEX_LEN        = 80;
 const size_t ALPHABET_LEN       = 24;
+const size_t MAX_FIELD_STR_LEN  = 20;
+const size_t MAX_FUNCTION_LEN   = 100;
 //--------------------------------------------------
 
 
@@ -228,7 +252,9 @@ bool is_unary          (Node* node);
 bool is_unary_minus    (Node* node);
 
 
-Return_code dfr_read_user_function             (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
+Return_code dfr_read_user_function  (Dfr* dfr, const char* file_name = dfr_default_input_file_name);
+Return_code dfr_build_user_function (Dfr* dfr, Dfr_settings* dfr_settings);
+
 
 Return_code dfr_write_user_function (Dfr*  dfr, int precision,                           const char* file_name = dfr_default_output_file_name);
 Return_code dfr_write_derivative    (Dfr* dfr, int precision, size_t derivative_num = 1, const char* file_name = dfr_default_output_file_name);
@@ -265,7 +291,7 @@ Return_code tex_write_user_function_ending       (FILE* file, Dfr* dfr, const ch
 const char* tex_get_phrase          (void);
 Return_code tex_write_function_name (FILE* file, size_t derivative_num);
 
-Return_code tex_generate_output     (Dfr* dfr, const char* variable, double taylor_point, size_t depth, double tangent_point, int precision, const char* file_name = dfr_default_tex_file_name);
+Return_code tex_generate_output     (Dfr* dfr, Dfr_settings settings, const char* file_name = dfr_default_tex_file_name);
 Return_code tex_write_preamble      (FILE* file);
 Return_code tex_write_end           (FILE* file);
 Return_code tex_write_introduction  (FILE* file, Dfr* dfr, const char* variable, int precision);
@@ -351,6 +377,12 @@ Return_code tex_write_graph                   (FILE* file, Dfr* dfr, const char*
 Return_code tex_generate_pdf (const char* file_name = dfr_default_tex_file_name);
 
 Return_code _dfr_sorry_message (const char* file, const char* func, int line);
+
+
+Return_code get_dfr_settings  (Dfr_settings* settings, const char* file_name = dfr_default_input_file_name);
+Dfr_field   what_field        (const char* str);
+Return_code dfr_settings_ctor (Dfr_settings* settings);
+Return_code dfr_settings_dtor (Dfr_settings* settings);
 
 /*
 

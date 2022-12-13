@@ -539,6 +539,25 @@ Return_code  dfr_read_user_function  (Dfr* dfr, const char* file_name) {
 }
 
 
+Return_code  dfr_build_user_function  (Dfr* dfr, Dfr_settings* dfr_settings) {
+
+    if (!dfr || !dfr_settings || !dfr_settings->function) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+
+    _dfr_buffer_read (dfr->buffer, dfr_settings->function);
+
+
+    dfr_user_function_tree_ctor (dfr);
+
+
+    try (read_general (dfr->buffer, dfr->user_function_tree));
+
+
+    return SUCCESS;
+}
+
+
 /*
 void  _fdfr_graphdump  (Dfr* dfr, const char* file_name, const char* file, const char* function, int line, const char* additional_text) {
 
@@ -962,6 +981,25 @@ Node*  node_calculate_derivative  (Node* node, const char* variable) {
 #define LEFTRIGHT  root_node-> left_son->right_son
 #define RIGHTLEFT  root_node->right_son-> left_son
 #define RIGHTRIGHT root_node->right_son->right_son
+
+#define  LEFT_DERIV node_calculate_derivative (node-> left_son,  variable)
+#define RIGHT_DERIV node_calculate_derivative (node->right_son,  variable)
+
+#define ADD  create_node (DAT_OPERATION, DOC_ADD)
+#define SUB  create_node (DAT_OPERATION, DOC_SUB)
+#define MULT create_node (DAT_OPERATION, DOC_MULT)
+#define DIV  create_node (DAT_OPERATION, DOC_DIV)
+#define LN   create_node (DAT_OPERATION, DOC_LN)
+#define POW  create_node (DAT_OPERATION, DOC_POW)
+#define SIN  create_node (DAT_OPERATION, DOC_SIN)
+#define COS  create_node (DAT_OPERATION, DOC_COS)
+
+#define  LEFT_COPY copy_node (node-> left_son)
+#define RIGHT_COPY copy_node (node->right_son)
+
+#define CONST_0     create_node (DAT_CONST, (double)  0)
+#define CONST_1     create_node (DAT_CONST, (double)  1)
+#define CONST_NEG_1 create_node (DAT_CONST, (double) -1)
 //--------------------------------------------------
 
 
@@ -972,7 +1010,7 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
     Node* root_node = nullptr;
 
-    switch (node->element.value.val_operation_code) {
+    switch (node->element.value.val_operation_code) { //DSL
 
         case DOC_UNKNOWN:
 
@@ -980,96 +1018,96 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
         case DOC_ADD:
 
-            ROOT = create_node (DAT_OPERATION, DOC_ADD);
+            ROOT = ADD;
 
-            LEFT  = node_calculate_derivative (node->left_son,  variable);
-            RIGHT = node_calculate_derivative (node->right_son, variable);
+            LEFT  = LEFT_DERIV;
+            RIGHT = RIGHT_DERIV;
 
             break;
 
         case DOC_SUB:
 
-            ROOT = create_node (DAT_OPERATION, DOC_SUB);
+            ROOT = SUB;
 
-            LEFT  = node_calculate_derivative (node->left_son,  variable);
-            RIGHT = node_calculate_derivative (node->right_son, variable);
+            LEFT  = LEFT_DERIV;
+            RIGHT = RIGHT_DERIV;
 
             break;
 
         case DOC_MULT:
 
-            ROOT = create_node (DAT_OPERATION, DOC_ADD);
+            ROOT = ADD;
 
-            LEFT  = create_node (DAT_OPERATION, DOC_MULT);
-            RIGHT = create_node (DAT_OPERATION, DOC_MULT);
+            LEFT  = MULT;
+            RIGHT = MULT;
 
-            LEFTLEFT   = node_calculate_derivative (node->left_son,  variable);
-            LEFTRIGHT  = copy_node (node->right_son);
-            RIGHTLEFT  = copy_node (node-> left_son);
-            RIGHTRIGHT = node_calculate_derivative (node->right_son, variable);
+            LEFTLEFT   = LEFT_DERIV;
+            LEFTRIGHT  = RIGHT_COPY;
+            RIGHTLEFT  = LEFT_COPY;
+            RIGHTRIGHT = RIGHT_DERIV;
 
             break;
 
         case DOC_DIV:
 
-            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+            ROOT = DIV;
 
-            LEFT  = create_node (DAT_OPERATION, DOC_SUB);
-            RIGHT = create_node (DAT_OPERATION, DOC_MULT);
+            LEFT  = SUB;
+            RIGHT = MULT;
 
-            LEFTLEFT   = create_node (DAT_OPERATION, DOC_MULT); //numerator
-            LEFTLEFT->left_son  = node_calculate_derivative (node->left_son, variable);
-            LEFTLEFT->right_son = copy_node (node->right_son);
-            LEFTRIGHT = create_node (DAT_OPERATION, DOC_MULT);
-            LEFTRIGHT->left_son  = copy_node (node->left_son);
-            LEFTRIGHT->right_son = node_calculate_derivative (node->right_son, variable);
+            LEFTLEFT   = MULT; //numerator
+            LEFTLEFT->left_son  = LEFT_DERIV;
+            LEFTLEFT->right_son = RIGHT_COPY;
+            LEFTRIGHT = MULT;
+            LEFTRIGHT->left_son  = LEFT_COPY;
+            LEFTRIGHT->right_son = RIGHT_DERIV;
 
-            RIGHTLEFT  = copy_node (node->right_son);
-            RIGHTRIGHT = copy_node (node->right_son);
+            RIGHTLEFT  = RIGHT_COPY;
+            RIGHTRIGHT = RIGHT_COPY;
 
             break;
 
         case DOC_POW:
 
-            if (node->left_son->atom_type == DAT_CONST && node->right_son->atom_type == DAT_CONST) return create_node (DAT_CONST, (double) 0);
+            if (node->left_son->atom_type == DAT_CONST && node->right_son->atom_type == DAT_CONST) return CONST_0;
 
             else if (node->right_son->atom_type == DAT_CONST) {
 
-                ROOT = create_node (DAT_OPERATION, DOC_MULT);
+                ROOT = MULT;
 
-                LEFT = create_node (DAT_OPERATION, DOC_MULT);
-                LEFTLEFT  = node_calculate_derivative (node->left_son, variable);
-                LEFTRIGHT = copy_node (node->right_son);
+                LEFT = MULT;
+                LEFTLEFT  = LEFT_DERIV;
+                LEFTRIGHT = RIGHT_COPY;
 
-                RIGHT = create_node (DAT_OPERATION, DOC_POW);
-                RIGHTLEFT             = copy_node (node->left_son);
-                RIGHTRIGHT            = create_node (DAT_OPERATION, DOC_SUB);
-                RIGHTRIGHT-> left_son = copy_node (node->right_son);
-                RIGHTRIGHT->right_son = create_node (DAT_CONST, (double) 1);
+                RIGHT = POW;
+                RIGHTLEFT             = LEFT_COPY;
+                RIGHTRIGHT            = SUB;
+                RIGHTRIGHT-> left_son = RIGHT_COPY;
+                RIGHTRIGHT->right_son = CONST_1;
             }
 
             else if (node->left_son->atom_type == DAT_CONST) {
 
-                ROOT = create_node (DAT_OPERATION, DOC_MULT);
+                ROOT = MULT;
 
-                LEFT = create_node (DAT_OPERATION, DOC_MULT); //ln(a) * x'
-                LEFTLEFT  = node_calculate_derivative (node->right_son, variable);
-                LEFTRIGHT = create_node (DAT_OPERATION, DOC_LN);
-                LEFTRIGHT-> left_son = create_node (DAT_CONST, (double) 0);
-                LEFTRIGHT->right_son = copy_node (node->left_son);
+                LEFT = MULT; //ln(a) * x'
+                LEFTLEFT  = RIGHT_DERIV;
+                LEFTRIGHT = LN;
+                LEFTRIGHT-> left_son = CONST_0;
+                LEFTRIGHT->right_son = LEFT_COPY;
 
                 RIGHT = copy_node (node); //a**x
             }
 
             else {
 
-                Node* temp = create_node (DAT_OPERATION, DOC_MULT); //g * ln(f)
-                temp->left_son =  copy_node (node->right_son);
-                temp->right_son = create_node (DAT_OPERATION, DOC_LN);
-                temp->right_son->left_son  = create_node (DAT_CONST, (double) 0);
-                temp->right_son->right_son = copy_node (node->left_son);
+                Node* temp = MULT; //g * ln(f)
+                temp->left_son =  RIGHT_COPY;
+                temp->right_son = LN;
+                temp->right_son->left_son  = CONST_0;
+                temp->right_son->right_son = LEFT_COPY;
 
-                ROOT  = create_node (DAT_OPERATION, DOC_MULT);
+                ROOT  = MULT;
                 LEFT  = copy_node (node);
                 RIGHT = node_calculate_derivative (temp, variable);
 
@@ -1080,68 +1118,68 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 
         case DOC_LN:
 
-            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+            ROOT = DIV;
 
-            LEFT  = node_calculate_derivative (node->right_son, variable);
-            RIGHT = copy_node (node->right_son);
+            LEFT  = RIGHT_DERIV;
+            RIGHT = RIGHT_COPY;
 
             break;
 
         case DOC_SIN:
 
-            ROOT = create_node (DAT_OPERATION, DOC_MULT);
+            ROOT = MULT;
 
-            LEFT       = node_calculate_derivative (node->right_son, variable);
-            RIGHT      = create_node (DAT_OPERATION, DOC_COS);
-            RIGHTLEFT  = create_node (DAT_CONST, (double) 0);
-            RIGHTRIGHT = copy_node (node->right_son);
+            LEFT       = RIGHT_DERIV;
+            RIGHT      = COS;
+            RIGHTLEFT  = CONST_0;
+            RIGHTRIGHT = RIGHT_COPY;
 
             break;
 
         case DOC_COS:
 
-            ROOT = create_node (DAT_OPERATION, DOC_MULT);
+            ROOT = MULT;
 
-            LEFT       = create_node (DAT_OPERATION, DOC_MULT);
-            LEFTLEFT   = create_node (DAT_CONST, (double) -1);
-            LEFTRIGHT  = node_calculate_derivative (node->right_son, variable);
-            RIGHT      = create_node (DAT_OPERATION, DOC_SIN);
-            RIGHTLEFT  = create_node (DAT_CONST, (double) 0);
-            RIGHTRIGHT = copy_node (node->right_son);
+            LEFT       = MULT;
+            LEFTLEFT   = CONST_NEG_1;
+            LEFTRIGHT  = RIGHT_DERIV;
+            RIGHT      = SIN;
+            RIGHTLEFT  = CONST_0;
+            RIGHTRIGHT = RIGHT_COPY;
 
             break;
 
         case DOC_TG:
 
-            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+            ROOT = DIV;
 
-            LEFT       = node_calculate_derivative (node->right_son, variable);
+            LEFT       = RIGHT_DERIV;
 
-            RIGHT      = create_node (DAT_OPERATION, DOC_MULT);
-            RIGHTLEFT  = create_node (DAT_OPERATION, DOC_COS);
-            RIGHTRIGHT = create_node (DAT_OPERATION, DOC_COS);
-            RIGHTLEFT-> left_son  = create_node (DAT_CONST, (double) 0);
-            RIGHTRIGHT->left_son  = create_node (DAT_CONST, (double) 0);
-            RIGHTLEFT-> right_son = copy_node (node->right_son);
-            RIGHTRIGHT->right_son = copy_node (node->right_son);
+            RIGHT      = MULT;
+            RIGHTLEFT  = COS;
+            RIGHTRIGHT = COS;
+            RIGHTLEFT-> left_son  = CONST_0;
+            RIGHTRIGHT->left_son  = CONST_0;
+            RIGHTLEFT-> right_son = RIGHT_COPY;
+            RIGHTRIGHT->right_son = RIGHT_COPY;
 
             break;
 
         case DOC_CTG:
 
-            ROOT = create_node (DAT_OPERATION, DOC_DIV);
+            ROOT = DIV;
 
-            LEFT       = create_node (DAT_OPERATION, DOC_MULT);
-            LEFTLEFT   = create_node (DAT_CONST, (double) -1);
-            LEFTRIGHT  = node_calculate_derivative (node->right_son, variable);
+            LEFT       = MULT;
+            LEFTLEFT   = CONST_NEG_1;
+            LEFTRIGHT  = RIGHT_DERIV;
 
-            RIGHT      = create_node (DAT_OPERATION, DOC_MULT);
-            RIGHTLEFT  = create_node (DAT_OPERATION, DOC_SIN);
-            RIGHTRIGHT = create_node (DAT_OPERATION, DOC_SIN);
-            RIGHTLEFT-> left_son  = create_node (DAT_CONST, (double) 0);
-            RIGHTRIGHT->left_son  = create_node (DAT_CONST, (double) 0);
-            RIGHTLEFT-> right_son = copy_node (node->right_son);
-            RIGHTRIGHT->right_son = copy_node (node->right_son);
+            RIGHT      = MULT;
+            RIGHTLEFT  = SIN;
+            RIGHTRIGHT = SIN;
+            RIGHTLEFT-> left_son  = CONST_0;
+            RIGHTRIGHT->left_son  = CONST_0;
+            RIGHTLEFT-> right_son = RIGHT_COPY;
+            RIGHTRIGHT->right_son = RIGHT_COPY;
 
             break;
 
@@ -1162,6 +1200,21 @@ Node*  operation_calculate_derivative  (Node* node, const char* variable) {
 #undef LEFTRIGHT
 #undef RIGHTLEFT
 #undef RIGHTRIGHT
+#undef LEFT_DERIV
+#undef RIGHT_DERIV
+#undef ADD
+#undef SUB
+#undef MULT
+#undef DIV
+#undef LN
+#undef POW
+#undef SIN
+#undef COS
+#undef LEFT_COPY
+#undef RIGHT_COPY
+#undef CONST_0
+#undef CONST_1
+#undef CONST_NEG_1
 //--------------------------------------------------
 
 
@@ -2167,7 +2220,7 @@ Return_code  tex_write_check_closing_bracket  (FILE* file, Node* son, Node* pare
 }
 
 
-Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor_point, size_t depth, double tangent_point, int precision, const char* file_name) {
+Return_code  tex_generate_output  (Dfr* dfr, Dfr_settings settings, const char* file_name) {
 
     if (!dfr) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
 
@@ -2180,7 +2233,7 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor
     }
 
 
-    if (precision > 6) precision = 6;
+    if (settings.precision > 6) settings.precision = 6;
 
 
 
@@ -2190,11 +2243,11 @@ Return_code  tex_generate_output  (Dfr* dfr, const char* variable, double taylor
 
 
     try (tex_write_preamble      (file));
-    try (tex_write_introduction  (file, dfr, variable,                      precision));
-    try (tex_write_user_function (file, dfr, variable,                      precision));
-    try (tex_write_derivative    (file, dfr, variable,                      precision));
-    try (tex_write_taylor        (file, dfr, variable, taylor_point, depth, precision));
-    try (tex_write_graph         (file, dfr, variable, tangent_point,       precision));
+    try (tex_write_introduction  (file, dfr, settings.variable,                                        settings.precision));
+    try (tex_write_user_function (file, dfr, settings.variable,                                        settings.precision));
+    try (tex_write_derivative    (file, dfr, settings.variable,                                        settings.precision));
+    try (tex_write_taylor        (file, dfr, settings.variable, settings.taylor_point, settings.depth, settings.precision));
+    try (tex_write_graph         (file, dfr, settings.variable, settings.tangent_point,                settings.precision));
     try (tex_write_end           (file));
 
 
@@ -3149,6 +3202,7 @@ Return_code  dfr_generate_gnu_plot_describtion  (Dfr* dfr, const char* variable,
     fprintf (file, "set output \"%s\"\n", dfr_gnu_plot_file_name);
     fprintf (file, "set xlabel \"x\"\n");
     fprintf (file, "set ylabel \"y\"\n");
+    fprintf (file, "set samples 1000\n");
 
     fprintf (file, "set title  \"%s(%s) = ", USER_FUNCTION_NAME, variable);
     fclose (file);
@@ -3348,5 +3402,105 @@ bool  is_unary_minus  (Node* node) {
 
 
     return false;
+}
+
+
+Return_code  get_dfr_settings  (Dfr_settings* settings, const char* file_name) {
+
+    if (!settings || !file_name)                    { LOG_ERROR (BAD_ARGS);                   return BAD_ARGS; }
+    if (!settings->variable || !settings->function) { LOG_MESSAGE ("unctored dfr_settings!"); return BAD_ARGS; }
+
+
+
+    FILE* file = fopen (file_name, "r");
+
+    size_t file_len = get_file_len (file);
+    char _buffer [file_len + 1] = "";
+    char* buffer = _buffer;
+    fread (_buffer, 1, file_len, file);
+
+    fclose (file);
+
+
+    int  amount_read = 0;
+    char field_str [MAX_FIELD_STR_LEN + 1] = "";
+    while (*buffer != '\0') {
+
+        sscanf (buffer, "%s %n", field_str, &amount_read); buffer += amount_read; //printf ("field: %d - %s\n", what_field (field_str), field_str);
+        switch (what_field (field_str)) {
+
+            case DFRF_VARIABLE:      sscanf (buffer, "%s  %n",  settings->variable,      &amount_read); buffer += amount_read; break;
+            case DFRF_PRECISION:     sscanf (buffer, "%d %n",  &settings->precision,     &amount_read); buffer += amount_read; break;
+            case DFRF_FUNCTION:
+
+                //printf ("start reading function:");
+                sscanf (buffer, "%s", field_str);
+                for (size_t i = 0; *buffer != '\0' && !what_field (field_str); i++) {
+
+                    settings->function [i] = *buffer; //printf ("%c", *buffer);
+                    buffer += 1; sscanf (buffer, "%s", field_str);
+                } //printf ("\n");
+
+                break;
+
+            case DFRF_TAYLOR_POINT:  sscanf (buffer, "%lf %n", &settings->taylor_point,  &amount_read); buffer += amount_read; break;
+            case DFRF_DEPTH:         sscanf (buffer, "%zd %n", &settings->depth,         &amount_read); buffer += amount_read; break;
+            case DFRF_TANGENT_POINT: sscanf (buffer, "%lf %n", &settings->tangent_point, &amount_read); buffer += amount_read; break;
+
+
+            case DFRF_UNKNOWN: LOG_MESSAGE ("bad field name!\n"); return BAD_ARGS;
+            default:           LOG_MESSAGE ("bad input!\n");        return BAD_ARGS;
+        }
+    }
+
+
+    return SUCCESS;
+}
+
+
+Dfr_field  what_field  (const char* str) {
+
+    if (!str) { LOG_ERROR (BAD_ARGS); return DFRF_UNKNOWN; }
+
+
+    if (!stricmp (str, "variable:"))      return DFRF_VARIABLE;
+    if (!stricmp (str, "precision:"))     return DFRF_PRECISION;
+    if (!stricmp (str, "function:"))      return DFRF_FUNCTION;
+    if (!stricmp (str, "taylor_point:"))  return DFRF_TAYLOR_POINT;
+    if (!stricmp (str, "depth:"))         return DFRF_DEPTH;
+    if (!stricmp (str, "tangent_point:")) return DFRF_TANGENT_POINT;
+
+
+    return DFRF_UNKNOWN;
+}
+
+
+Return_code  dfr_settings_ctor  (Dfr_settings* settings) {
+
+    if (!settings) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    settings->variable      = (char*) calloc (MAX_VARIABLE_LEN, 1);
+    settings->precision     = 1;
+    settings->function      = (char*) calloc (MAX_FUNCTION_LEN, 1);
+    settings->taylor_point  = 1;
+    settings->depth         = 3;
+    settings->tangent_point = 1;
+
+
+    return SUCCESS;
+}
+
+
+Return_code  dfr_settings_dtor  (Dfr_settings* settings) {
+
+    if (!settings) { LOG_ERROR (BAD_ARGS); return BAD_ARGS; }
+
+
+    free (settings->variable);
+    free (settings->function);
+
+
+    return SUCCESS;
 }
 
